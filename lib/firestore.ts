@@ -677,6 +677,27 @@ export async function ensureSessionAndPlayers(
 }
 
 /**
+ * Luồng /admin/session/new: CHỐT danh sách buổi (courts + ~22 người) —
+ * KHÔNG check-in ai. Đây là lúc "chốt danh sách" thật sự (xem comment
+ * bumpCoAttendance trong lib/firestore.ts) nên bump co-attendance ở
+ * đây, không đợi đến /checkin.
+ *
+ * /checkin (đơn giản hơn) vẫn hoạt động độc lập nếu admin bỏ qua màn
+ * này — ensureSessionAndPlayers là idempotent, và checkInForToday tự
+ * biết KHÔNG bump lại nếu session đã tồn tại (created:false).
+ */
+export async function createSessionRoster(
+  db: Firestore,
+  clubId: string,
+  args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
+  now = Date.now(),
+): Promise<{ created: boolean }> {
+  const result = await ensureSessionAndPlayers(db, clubId, args, now);
+  if (result.created) await bumpCoAttendance(db, clubId, args.playerIds, now);
+  return result;
+}
+
+/**
  * Luồng /checkin: tạo session nếu cần, bump co-attendance CHỈ khi session
  * mới tạo (tránh đếm trùng nếu admin bấm check-in lại giữa buổi), rồi
  * check-in (idempotent — xem checkInBatch).

@@ -21,15 +21,29 @@ export interface Actor {
 const KEY = 'actor';
 const listeners = new Set<() => void>();
 
+// useSyncExternalStore đòi getSnapshot() trả về CÙNG reference nếu dữ
+// liệu chưa đổi (so sánh bằng Object.is). JSON.parse() mỗi lần gọi tạo
+// object MỚI dù chuỗi localStorage giống hệt → React thấy "snapshot đổi
+// liên tục" → lặp vô hạn ("Maximum update depth exceeded"). Cache theo
+// chuỗi thô để trả về đúng 1 reference khi chưa có gì thay đổi.
+let cachedRaw: string | null | undefined;
+let cachedActor: Actor | null = null;
+
 function read(): Actor | null {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as Actor;
-  } catch {
+  if (raw === cachedRaw) return cachedActor;
+  cachedRaw = raw;
+  if (!raw) {
+    cachedActor = null;
     return null;
   }
+  try {
+    cachedActor = JSON.parse(raw) as Actor;
+  } catch {
+    cachedActor = null;
+  }
+  return cachedActor;
 }
 
 export function getActor(): Actor | null {
