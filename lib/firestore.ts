@@ -28,11 +28,10 @@ import type {
 } from './types';
 import { pairKey, DEFAULT_CONFIG } from './types';
 import { suggestMatch } from './matchmaking';
-import { updateRatings } from './rating';
+import { updateRatings, seedMu, SIGMA_INIT } from './rating';
 
 import {
-  getFirestore, doc, collection, runTransaction,
-  Timestamp, type Transaction, type Firestore,
+  getFirestore, Timestamp, type Transaction, type Firestore,
 } from 'firebase-admin/firestore';
 
 // ============================================================
@@ -127,7 +126,7 @@ export async function checkInBatch(
   now = Date.now(),
 ): Promise<void> {
   const ref = db.doc(`sessions/${sessionId}`);
-  await runTransaction(db, async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Transaction) => {
     const snap = await tx.get(ref);
     const s = snap.data() as SessionDoc;
 
@@ -173,16 +172,17 @@ export async function recordResult(
     actor: string;
   },
   now = Date.now(),
-): Promise<{ alreadyRecorded: boolean }> {
+): Promise<{ alreadyRecorded: boolean; auditLogId: string | null }> {
   const sRef = db.doc(`sessions/${sessionId}`);
   const gRef = db.doc(`sessions/${sessionId}/games/${args.gameId}`);
   const pRef = db.doc(`clubs/${clubId}/meta/pairStats`);
+  const rRef = db.doc(`clubs/${clubId}/private/ratings`);
   const aRef = db.collection(`sessions/${sessionId}/audit`).doc();
 
-  return runTransaction(db, async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Transaction) => {
     // --- ĐỌC HẾT TRƯỚC (Firestore bắt buộc: mọi read trước mọi write) ---
-    const [sSnap, gSnap, pSnap] = await Promise.all([
-      tx.get(sRef), tx.get(gRef), tx.get(pRef),
+    const [sSnap, gSnap, pSnap, rSnap] = await Promise.all([
+      tx.get(sRef), tx.get(gRef), tx.get(pRef), tx.get(rRef),
     ]);
     const s = sSnap.data() as SessionDoc;
     const g = gSnap.data() as Game | undefined;
@@ -191,14 +191,24 @@ export async function recordResult(
 
     // --- IDEMPOTENT ---
     if (g.winner !== null || g.status === 'VOID') {
-      return { alreadyRecorded: true };       // ← không phải lỗi. Trả 200.
+      // Lần tap đầu mới có auditLogId (để Undo) — các lần tap trùng sau
+      // không cần, vì chỉ hành động GẦN NHẤT mới hoàn tác được.
+      return { alreadyRecorded: true, auditLogId: null };       // ← không phải lỗi. Trả 200.
     }
 
     const stats = (pSnap.data() as PairStatsDoc | undefined)?.pairs ?? {};
+    const clubRatings = (rSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
 
     const [a1, a2] = g.teamA;
     const [b1, b2] = g.teamB;
     const four = [a1, a2, b1, b2];
+
+    // clubs/{cid}/players/{id} chỉ tồn tại cho 55 hội viên — KHÔNG cho
+    // khách vãng lai (xem addGuest). gamesTotal/lastPlayedAt vĩnh viễn
+    // chỉ áp dụng cho hội viên.
+    const memberIds = four.filter(id => !id.startsWith('guest-'));
+    const memberRefs = memberIds.map(id => db.doc(`clubs/${clubId}/players/${id}`));
+    const memberSnaps = await Promise.all(memberRefs.map(r => tx.get(r)));
 
     // --- SNAPSHOT ĐỂ UNDO ---
     // TrueSkill KHÔNG CÓ HÀM NGƯỢC. Không suy ra được mu cũ từ mu mới.
@@ -217,6 +227,10 @@ export async function recordResult(
         pairKey(a1, a2), pairKey(b1, b2),
         pairKey(a1, b1), pairKey(a1, b2), pairKey(a2, b1), pairKey(a2, b2),
       ].map(k => ({ key: k, ...(stats[k] ?? { partnered: 0, opposed: 0, coPresent: 0 }) })),
+      members: memberIds.map((id, i) => {
+        const p = memberSnaps[i].data() as PublicPlayerDoc | undefined;
+        return { id, gamesTotal: p?.gamesTotal ?? 0, lastPlayedAt: p?.lastPlayedAt ?? null };
+      }),
     };
 
     // --- RATING (lõi thuần) ---
@@ -233,6 +247,12 @@ export async function recordResult(
     const players = { ...s.players };
     for (const u of updates) {
       players[u.playerId] = { ...players[u.playerId], mu: u.mu, sigma: u.sigma };
+      // Đồng bộ VĨNH VIỄN về clubs/{cid}/private/ratings — nếu không, rating
+      // chỉ sống trong session doc hôm nay và biến mất khi buổi sau tạo lại
+      // từ ratings cũ. Khách vãng lai KHÔNG lưu — id của họ dùng một lần.
+      if (!u.playerId.startsWith('guest-')) {
+        clubRatings[u.playerId] = { mu: u.mu, sigma: u.sigma };
+      }
     }
 
     // --- PAIR STATS (KHÔNG DECAY) ---
@@ -269,9 +289,21 @@ export async function recordResult(
     });
     tx.update(sRef, { players, attendance, courts });
     tx.set(pRef, { pairs: stats, updatedAt: now });
-    tx.set(aRef, { at: now, actor: args.actor, action: 'RESULT', payload: { ...args, before } });
+    tx.set(rRef, { ratings: clubRatings, updatedAt: now });
+    for (let i = 0; i < memberIds.length; i++) {
+      if (!memberSnaps[i].exists) continue;
+      const cur = before.members[i];
+      tx.update(memberRefs[i], { gamesTotal: cur.gamesTotal + 1, lastPlayedAt: now });
+    }
+    tx.set(aRef, {
+      at: now, actor: args.actor, action: 'RESULT',
+      payload: {
+        gameId: args.gameId, courtIdx: args.courtIdx, winner: args.winner,
+        scoreLoser: args.scoreLoser ?? null, actor: args.actor, before,
+      },
+    });
 
-    return { alreadyRecorded: false };
+    return { alreadyRecorded: false, auditLogId: aRef.id };
   });
 }
 
@@ -325,7 +357,7 @@ export async function assignCourt(
   const gRef = db.collection(`sessions/${sessionId}/games`).doc();
   const lRef = db.collection(`sessions/${sessionId}/audit`).doc();
 
-  return runTransaction(db, async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Transaction) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
 
@@ -459,7 +491,7 @@ export async function bumpCoAttendance(
   now = Date.now(),
 ): Promise<void> {
   const ref = db.doc(`clubs/${clubId}/meta/pairStats`);
-  await runTransaction(db, async (tx) => {
+  await db.runTransaction(async (tx: Transaction) => {
     const snap = await tx.get(ref);
     const stats = (snap.data() as PairStatsDoc | undefined)?.pairs ?? {};
 
@@ -472,5 +504,352 @@ export async function bumpCoAttendance(
       }
     }
     tx.set(ref, { pairs: stats, updatedAt: now });
+  });
+}
+
+// ============================================================
+// NGƯỜI CHƠI — CRUD + xếp hạng seed
+//
+// TÁCH DOC theo firestore.rules:
+//   clubs/{cid}/players/{pid}   ← đọc mở (để hiện tên). KHÔNG chứa mu/sigma.
+//   clubs/{cid}/private/ratings ← chỉ server. { [playerId]: {mu, sigma} }
+//
+// Ẩn rating 3 tháng nghĩa là ẩn khỏi client — nên rating không được nằm
+// trong doc mà client đọc trực tiếp.
+// ============================================================
+
+export interface PublicPlayerDoc {
+  id: PlayerId;
+  name: string;
+  gender: 'M' | 'F';
+  div: 1 | 2;
+  seedRank: number;
+  gamesTotal: number;
+  lastPlayedAt: number | null;
+  isGuest: boolean;
+  active: boolean;
+}
+
+/** clubs/{cid}/private/ratings — một doc, map mọi người chơi. */
+export interface RatingsDoc {
+  ratings: Record<PlayerId, { mu: number; sigma: number }>;
+  updatedAt: number;
+}
+
+/**
+ * Thêm người chơi mới. seedRank = cuối bảng div đó (đang active).
+ * Admin kéo-thả sắp lại thứ tự sau (xem reorderDivision).
+ */
+export async function createPlayer(
+  db: Firestore,
+  clubId: string,
+  args: { name: string; gender: 'M' | 'F'; div: 1 | 2 },
+  now = Date.now(),
+): Promise<PublicPlayerDoc> {
+  const playersRef = db.collection(`clubs/${clubId}/players`);
+  const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
+  const ref = playersRef.doc();
+
+  return db.runTransaction(async (tx: Transaction) => {
+    const [divSnap, ratingsSnap] = await Promise.all([
+      tx.get(playersRef.where('div', '==', args.div).where('active', '==', true)),
+      tx.get(ratingsRef),
+    ]);
+
+    const divSize = divSnap.size + 1;
+    const seedRank = divSize;
+    const player: PublicPlayerDoc = {
+      id: ref.id, name: args.name, gender: args.gender, div: args.div,
+      seedRank, gamesTotal: 0, lastPlayedAt: null, isGuest: false, active: true,
+    };
+
+    const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+    ratings[ref.id] = { mu: seedMu(args.div, seedRank, divSize), sigma: SIGMA_INIT };
+
+    tx.set(ref, player);
+    tx.set(ratingsRef, { ratings, updatedAt: now });
+    return player;
+  });
+}
+
+/** Sửa tên / giới tính / active. KHÔNG sửa div hay seedRank ở đây — dùng reorderDivision. */
+export async function updatePlayer(
+  db: Firestore,
+  clubId: string,
+  playerId: PlayerId,
+  patch: Partial<Pick<PublicPlayerDoc, 'name' | 'gender' | 'active'>>,
+): Promise<void> {
+  await db.doc(`clubs/${clubId}/players/${playerId}`).update(patch);
+}
+
+/**
+ * Kéo-thả sắp lại thứ tự TRONG một div → ghi lại seedRank + tính lại mu
+ * bằng seedMu(). KHÔNG đụng sigma — sigma phản ánh số trận đã đánh thật,
+ * không phải thứ hạng admin gán.
+ */
+export async function reorderDivision(
+  db: Firestore,
+  clubId: string,
+  div: 1 | 2,
+  orderedIds: PlayerId[],
+  now = Date.now(),
+): Promise<void> {
+  const playersRef = db.collection(`clubs/${clubId}/players`);
+  const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
+
+  await db.runTransaction(async (tx: Transaction) => {
+    const [playerSnaps, ratingsSnap] = await Promise.all([
+      Promise.all(orderedIds.map(id => tx.get(playersRef.doc(id)))),
+      tx.get(ratingsRef),
+    ]);
+
+    const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+
+    orderedIds.forEach((id, i) => {
+      if (!playerSnaps[i].exists) throw new Error(`player not found: ${id}`);
+      const seedRank = i + 1;
+      tx.update(playersRef.doc(id), { seedRank });
+      const cur = ratings[id] ?? { mu: 0, sigma: SIGMA_INIT };
+      ratings[id] = { mu: seedMu(div, seedRank, orderedIds.length), sigma: cur.sigma };
+    });
+
+    tx.set(ratingsRef, { ratings, updatedAt: now });
+  });
+}
+
+// ============================================================
+// CHECK-IN (bản tối giản) — /checkin vừa tạo session (nếu chưa có)
+// vừa check-in trong một luồng, không qua /admin/session/new riêng.
+// ============================================================
+
+/**
+ * Đảm bảo sessions/{sessionId} tồn tại và có đủ bản sao {name,gender,div,
+ * mu,sigma} của những người được chọn (denormalized — xem đầu file).
+ *
+ * Nếu session đã tồn tại, chỉ BỔ SUNG người mới vào players (không đụng
+ * người đã có — tránh ghi đè mu/sigma đã cập nhật qua các trận trong buổi).
+ */
+export async function ensureSessionAndPlayers(
+  db: Firestore,
+  clubId: string,
+  args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
+  now = Date.now(),
+): Promise<{ created: boolean }> {
+  const sRef = db.doc(`sessions/${args.sessionId}`);
+  const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
+  const playersRef = db.collection(`clubs/${clubId}/players`);
+
+  return db.runTransaction(async (tx: Transaction) => {
+    const [sSnap, ratingsSnap, playerSnaps] = await Promise.all([
+      tx.get(sRef),
+      tx.get(ratingsRef),
+      Promise.all(args.playerIds.map(id => tx.get(playersRef.doc(id)))),
+    ]);
+
+    const s = sSnap.data() as SessionDoc | undefined;
+    const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+    const players: Record<PlayerId, SessionPlayer> = { ...(s?.players ?? {}) };
+
+    for (const snap of playerSnaps) {
+      if (!snap.exists || players[snap.id]) continue;
+      const p = snap.data() as PublicPlayerDoc;
+      const r = ratings[p.id] ?? { mu: 50, sigma: SIGMA_INIT };
+      players[p.id] = { id: p.id, name: p.name, gender: p.gender, div: p.div, mu: r.mu, sigma: r.sigma };
+    }
+
+    if (s) {
+      tx.update(sRef, { players });
+      return { created: false };
+    }
+
+    const doc: SessionDoc = {
+      id: args.sessionId, clubId, date: args.sessionId,
+      courtCount: args.courtCount, targetHeadcount: args.playerIds.length,
+      mode: 'OFF', players, attendance: {},
+      courts: Array.from({ length: args.courtCount }, (_, i) => ({
+        idx: i, gameId: null, players: null, teamA: null, teamB: null, startedAt: null,
+      })),
+      startedAt: now, endedAt: null,
+    };
+    tx.set(sRef, doc);
+    return { created: true };
+  });
+}
+
+/**
+ * Luồng /checkin: tạo session nếu cần, bump co-attendance CHỈ khi session
+ * mới tạo (tránh đếm trùng nếu admin bấm check-in lại giữa buổi), rồi
+ * check-in (idempotent — xem checkInBatch).
+ */
+export async function checkInForToday(
+  db: Firestore,
+  clubId: string,
+  args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
+  now = Date.now(),
+): Promise<void> {
+  const { created } = await ensureSessionAndPlayers(db, clubId, args, now);
+  if (created) await bumpCoAttendance(db, clubId, args.playerIds, now);
+  await checkInBatch(db, args.sessionId, args.playerIds, now);
+}
+
+// ============================================================
+// CHẾ ĐỘ — OFF / RECORD / ASSIGN, đổi bất cứ lúc nào giữa buổi
+// ============================================================
+
+export async function setMode(
+  db: Firestore,
+  sessionId: string,
+  mode: 'OFF' | 'RECORD' | 'ASSIGN',
+): Promise<void> {
+  await db.doc(`sessions/${sessionId}`).update({ mode });
+}
+
+// ============================================================
+// TẠM NGHỈ — AVAILABLE ↔ PAUSED, chỉ qua tap tường minh (xem ARCHITECTURE.md §5).
+//
+// CHỈ đổi status. KHÔNG đụng freeAt — tạm nghỉ không làm mất vị trí hàng
+// chờ đã tích luỹ trước đó (đi WC 5 phút không nên bị đẩy xuống cuối).
+// ============================================================
+
+export async function setPaused(
+  db: Firestore,
+  sessionId: string,
+  playerId: PlayerId,
+  paused: boolean,
+): Promise<void> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  await db.runTransaction(async (tx: Transaction) => {
+    const snap = await tx.get(sRef);
+    const s = snap.data() as SessionDoc;
+    const cur = s.attendance[playerId];
+    if (!cur || (cur.status !== 'AVAILABLE' && cur.status !== 'PAUSED')) return; // đang PLAYING/LEFT → bỏ qua
+    tx.update(sRef, { [`attendance.${playerId}.status`]: paused ? 'PAUSED' : 'AVAILABLE' });
+  });
+}
+
+// ============================================================
+// KHÁCH VÃNG LAI — thêm thẳng vào session, KHÔNG tạo doc trong
+// clubs/{cid}/players (khách không thuộc danh sách 55 người cố định).
+//
+// sigma khởi tạo LỚN HƠN người hội viên (15 so với 8) — đây là cơ chế
+// tự bảo vệ rating hội viên khi đánh cùng khách (xem lib/rating.ts,
+// updateRatings: mức thay đổi tỉ lệ sigma², không cần code gì thêm).
+// ============================================================
+
+const GUEST_SIGMA = 15;
+const GUEST_MU = 50;
+
+export async function addGuest(
+  db: Firestore,
+  sessionId: string,
+  args: { name: string; gender: 'M' | 'F' },
+  now = Date.now(),
+): Promise<{ id: PlayerId }> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  const id = `guest-${db.collection('_ids').doc().id}`;
+
+  await db.runTransaction(async (tx: Transaction) => {
+    const snap = await tx.get(sRef);
+    const s = snap.data() as SessionDoc;
+
+    const players = {
+      ...s.players,
+      [id]: { id, name: args.name, gender: args.gender, div: 1 as const, mu: GUEST_MU, sigma: GUEST_SIGMA },
+    };
+    const attendance = {
+      ...s.attendance,
+      [id]: { status: 'AVAILABLE' as const, checkedInAt: now, leftAt: null, gamesToday: 0, freeAt: now },
+    };
+
+    tx.update(sRef, { players, attendance });
+  });
+
+  return { id };
+}
+
+// ============================================================
+// HOÀN TÁC — chỉ trong 60 giây, chỉ hành động GẦN NHẤT.
+// Hiện tại chỉ hỗ trợ hoàn tác RESULT (Step 2). Hoàn tác ASSIGN sẽ
+// thêm khi ASSIGN mode được xây (Step 5) — payload assign hiện chưa
+// snapshot "before" vì bản thân assign không đổi rating/pairStats.
+// ============================================================
+
+export async function undoResult(
+  db: Firestore,
+  sessionId: string,
+  clubId: string,
+  auditLogId: string,
+  now = Date.now(),
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  const aRef = db.doc(`sessions/${sessionId}/audit/${auditLogId}`);
+  const pRef = db.doc(`clubs/${clubId}/meta/pairStats`);
+  const rRef = db.doc(`clubs/${clubId}/private/ratings`);
+
+  return db.runTransaction(async (tx: Transaction) => {
+    const [aSnap, sSnap, pSnap, rSnap] = await Promise.all([
+      tx.get(aRef), tx.get(sRef), tx.get(pRef), tx.get(rRef),
+    ]);
+    const audit = aSnap.data();
+    if (!audit) return { ok: false, error: 'không tìm thấy log' };
+    if (audit.action !== 'RESULT') return { ok: false, error: 'chỉ hoàn tác được kết quả trận đấu' };
+    if (audit.undoneAt) return { ok: false, error: 'đã hoàn tác rồi' };
+    if (now - audit.at > 60_000) return { ok: false, error: 'quá 60 giây — không hoàn tác được nữa' };
+
+    const { gameId, courtIdx, before } = audit.payload as {
+      gameId: string; courtIdx: number;
+      before: {
+        ratings: Array<{ id: PlayerId; mu: number; sigma: number }>;
+        attendance: Array<{ id: PlayerId; gamesToday: number; freeAt: number; status: string }>;
+        pairs: Array<{ key: string; partnered: number; opposed: number; coPresent: number }>;
+        members: Array<{ id: PlayerId; gamesTotal: number; lastPlayedAt: number | null }>;
+      };
+    };
+
+    const gRef = db.doc(`sessions/${sessionId}/games/${gameId}`);
+    const memberRefs = before.members.map(m => db.doc(`clubs/${clubId}/players/${m.id}`));
+    const [gSnap, ...memberSnaps] = await Promise.all([tx.get(gRef), ...memberRefs.map(r => tx.get(r))]);
+    const g = gSnap.data() as Game | undefined;
+    if (!g) return { ok: false, error: 'không tìm thấy trận' };
+
+    const s = sSnap.data() as SessionDoc;
+    const players = { ...s.players };
+    const clubRatings = (rSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+    for (const r of before.ratings) {
+      players[r.id] = { ...players[r.id], mu: r.mu, sigma: r.sigma };
+      if (!r.id.startsWith('guest-')) clubRatings[r.id] = { mu: r.mu, sigma: r.sigma };
+    }
+
+    const attendance = { ...s.attendance };
+    for (const a of before.attendance) {
+      attendance[a.id] = {
+        ...attendance[a.id],
+        gamesToday: a.gamesToday, freeAt: a.freeAt,
+        status: a.status as SessionDoc['attendance'][string]['status'],
+      };
+    }
+
+    const stats = (pSnap.data() as PairStatsDoc | undefined)?.pairs ?? {};
+    for (const pr of before.pairs) stats[pr.key] = { partnered: pr.partnered, opposed: pr.opposed, coPresent: pr.coPresent };
+
+    // Sân được recordResult() giải phóng — trả lại đúng trận đang diễn ra
+    // bằng dữ liệu từ chính game doc (teamA/teamB/startedAt không đổi).
+    const courts = s.courts.map(c =>
+      c.idx === courtIdx
+        ? { ...c, gameId: g.id, players: [...g.teamA, ...g.teamB], teamA: g.teamA, teamB: g.teamB, startedAt: g.startedAt }
+        : c);
+
+    tx.update(sRef, { players, attendance, courts });
+    tx.set(pRef, { pairs: stats, updatedAt: now });
+    tx.set(rRef, { ratings: clubRatings, updatedAt: now });
+    for (let i = 0; i < before.members.length; i++) {
+      if (!memberSnaps[i].exists) continue;
+      const m = before.members[i];
+      tx.update(memberRefs[i], { gamesTotal: m.gamesTotal, lastPlayedAt: m.lastPlayedAt });
+    }
+    tx.update(gRef, { winner: null, endedAt: null });
+    tx.update(aRef, { undoneAt: now });
+
+    return { ok: true };
   });
 }
