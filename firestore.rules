@@ -1,0 +1,81 @@
+rules_version = '2';
+
+// ============================================================
+// firestore.rules
+//
+// NGUYÊN TẮC:
+//   ĐỌC — mở toang. Dán link vào Zalo, ai mở cũng xem được.
+//         Đây là cách app LAN RA trong nhóm mà không cần thuyết phục ai.
+//         Một app phải xin mã mới xem được thì không ai xem, và không ai
+//         xem thì không ai dùng.
+//
+//   GHI — KHÔNG BAO GIỜ từ client. Chỉ qua Admin SDK (server-side),
+//         thứ bỏ qua toàn bộ rules này.
+//
+//   Vì sao? Nếu client ghi trực tiếp: hai điện thoại cùng lấy An và Bình
+//   cho hai sân khác nhau. Server phải là trọng tài.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- TRẠNG THÁI BUỔI CHƠI: ai cũng đọc được ----------
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow write: if false;          // ← chỉ Admin SDK
+
+      match /games/{gameId} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // Nhật ký: KHÔNG cho client đọc. Không cần, và nó chứa snapshot rating.
+      match /audit/{logId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ---------- CÂU LẠC BỘ ----------
+    match /clubs/{clubId} {
+      allow read: if true;
+      allow write: if false;
+
+      // Danh sách người chơi: đọc được (để hiện tên).
+      // NHƯNG mu/sigma là dữ liệu nhạy cảm — rating ẩn ít nhất 3 tháng.
+      // Giải pháp: KHÔNG lưu mu/sigma trong doc mà client đọc.
+      // Chúng nằm trong clubs/{cid}/private/ratings — client không thấy.
+      match /players/{playerId} {
+        allow read: if true;
+        allow write: if false;
+      }
+
+      // pairStats + ratings: chỉ server. Client KHÔNG cần, và không nên thấy.
+      match /meta/{docId} {
+        allow read, write: if false;
+      }
+      match /private/{docId} {
+        allow read, write: if false;
+      }
+    }
+  }
+}
+
+// ============================================================
+// LƯU Ý VỀ RATING
+//
+// SessionDoc.players[] có chứa mu/sigma (để suggestMatch chạy được
+// server-side mà chỉ đọc 1 doc). Client ĐỌC ĐƯỢC doc đó.
+//
+// → Nếu bạn muốn ẩn rating hoàn toàn trong 3 tháng đầu, có 2 cách:
+//
+//   A. Chấp nhận. Rating nằm trong payload nhưng UI không hiện.
+//      Chỉ người mở DevTools mới thấy. Với nhóm bạn bè, đủ.
+//
+//   B. Tách SessionDoc làm hai:
+//        sessions/{sid}          ← client đọc (không có mu/sigma)
+//        sessions/{sid}/private/state  ← chỉ server (có mu/sigma)
+//      Đúng hơn, nhưng transaction phải đụng 2 doc thay vì 1.
+//
+// Khuyến nghị: (A) cho v1. Chuyển sang (B) nếu có người soi DevTools
+// và làm ầm lên — điều gần như chắc chắn KHÔNG xảy ra.
+// ============================================================
