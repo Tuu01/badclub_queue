@@ -1,1 +1,56 @@
 @import "tailwindcss";
+
+/* ============================================================
+ * UI.md — "Court Surface" design tokens.
+ * One mode only (dark). Colour is signal, not decoration.
+ * ============================================================ */
+
+@theme {
+  --font-display: 'Archivo', sans-serif;
+  --font-body: 'Instrument Sans', sans-serif;
+
+  /* Court — the surface, deep to shallow */
+  --color-court-900: #061A18; /* page ground */
+  --color-court-800: #0B2E2A; /* cards, surfaces */
+  --color-court-700: #124039; /* raised, active */
+
+  /* Line — court markings, the shuttle */
+  --color-line-000: #F2F6F4; /* primary text, names */
+  --color-line-400: #8FA8A1; /* secondary text, labels */
+  --color-line-700: #2C5951; /* hairlines, dividers */
+  --color-line-800: #1A403A; /* fainter lines */
+
+  /* Signal — ONLY for "this concerns you". Nowhere else. */
+  --color-signal: #FF4D2E;
+  --color-signal-dim: #7A2417;
+
+  /* Live — running state, connection dot. Use sparingly. */
+  --color-live: #4ADE9B;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-court-900);
+}
+
+body {
+  background: var(--color-court-900);
+  color: var(--color-line-000);
+  font-family: var(--font-body);
+}
+
+/* font-variant-numeric: tabular-nums is mandatory on anything that
+   changes (clocks, minutes) — without it the digits jump. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *:not(.undo-bar-fill) {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

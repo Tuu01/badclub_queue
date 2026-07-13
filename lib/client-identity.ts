@@ -1,14 +1,14 @@
 'use client';
 
 // ============================================================
-// client-identity.ts — "mở app → chọn tên → localStorage. Xong."
-// Không tài khoản. Chỉ để: (1) tô đậm "Bạn" trong hàng chờ,
-// (2) actor ghi vào audit log (ai bấm gì) — KHÔNG dùng để phân quyền
-// (xem lib/auth.ts, mã vào cửa mới là thứ gác quyền ghi).
+// client-identity.ts — "open the app → pick your name → localStorage. Done."
+// No accounts. Only used to: (1) highlight "You" in the queue,
+// (2) the actor written to the audit log (who tapped what) — NOT used
+// for permissions (see lib/auth.ts; the access code is what gates writes).
 //
-// useSyncExternalStore thay vì useState+useEffect: localStorage là một
-// external store thật (SSR không có window), đây là đúng công cụ cho nó
-// — không phải setState trong effect.
+// useSyncExternalStore instead of useState+useEffect: localStorage is a
+// real external store (no window on the server), which is the right
+// tool for it — not setState inside an effect.
 // ============================================================
 
 import { useSyncExternalStore } from 'react';
@@ -21,11 +21,13 @@ export interface Actor {
 const KEY = 'actor';
 const listeners = new Set<() => void>();
 
-// useSyncExternalStore đòi getSnapshot() trả về CÙNG reference nếu dữ
-// liệu chưa đổi (so sánh bằng Object.is). JSON.parse() mỗi lần gọi tạo
-// object MỚI dù chuỗi localStorage giống hệt → React thấy "snapshot đổi
-// liên tục" → lặp vô hạn ("Maximum update depth exceeded"). Cache theo
-// chuỗi thô để trả về đúng 1 reference khi chưa có gì thay đổi.
+// useSyncExternalStore requires getSnapshot() to return the SAME
+// reference when the underlying data hasn't changed (compared via
+// Object.is). JSON.parse() on every call creates a NEW object even
+// when the localStorage string is identical → React sees "the
+// snapshot keeps changing" → infinite loop ("Maximum update depth
+// exceeded"). Cache by the raw string so we return exactly one
+// reference when nothing has actually changed.
 let cachedRaw: string | null | undefined;
 let cachedActor: Actor | null = null;
 
@@ -69,7 +71,7 @@ function getServerSnapshot(): Actor | null {
   return null;
 }
 
-/** Đọc actor hiện tại, tự re-render khi setActor()/clearActor() được gọi. */
+/** Reads the current actor, re-rendering whenever setActor()/clearActor() is called. */
 export function useActor(): Actor | null {
   return useSyncExternalStore(subscribe, read, getServerSnapshot);
 }
