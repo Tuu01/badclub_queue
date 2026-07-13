@@ -17,11 +17,30 @@
 // holds against the REAL database, not just by reading the code.
 //
 // NOT an emulator test — USECASES.md PART 7 asks for a Firestore
-// emulator suite, but this project has no emulator wired up yet
-// (firebase-tools isn't installed, and adding it needs a dependency
-// decision + a Java runtime, both out of scope for this pass — ask
-// before adding). This runs against the real project instead, using a
-// throwaway session id that's created and deleted in the same run.
+// emulator suite. Deliberately didn't build one. The reasoning, so the
+// next person can re-evaluate the trade rather than just see a TODO:
+//
+//   Setting up the emulator means installing firebase-tools (a new
+//   dependency — CLAUDE.md says ask first) AND a Java runtime, which
+//   isn't confirmed present on this machine. That's real, uncertain
+//   setup cost, four days before the trial, to test ONE transaction.
+//   The thing actually being tested — Firestore's optimistic-
+//   concurrency retry on a single doc — is Firestore's own guarantee,
+//   not app logic; an emulator wouldn't exercise a meaningfully
+//   different code path than the real project does.
+//
+//   So: run it against the real project, with a throwaway session id
+//   that's created and deleted in the same run, same pattern used for
+//   every verification this session. It's not hermetic (needs network
+//   + real credentials + >=6 real active players in clubs/default/
+//   players to exist), but it's honest about what it's actually
+//   checking, and it isn't theoretical — this exact style of live
+//   Firestore check (see verify_uc1_swap.ts, thrown away, not this
+//   file) is what caught the UC-1 swap bug that unit tests and code
+//   review both missed. If the emulator ever gets set up for other
+//   reasons, this test's assertions carry over unchanged — only the
+//   `adminDb` wiring would need to point at it instead.
+//
 // tsx doesn't auto-load .env.local — load it before importing
 // lib/firebase-admin (static imports get hoisted, so this has to be
 // a dynamic import after the env is available).
