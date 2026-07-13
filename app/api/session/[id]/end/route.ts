@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { endSession, NotLiveError } from '@/lib/firestore';
 import { hasValidCode } from '@/lib/auth';
+import { CLUB_ID } from '@/lib/constants';
 
 // Admin-initiated end from /admin/sessions. See lib/firestore.ts#endSession
 // for why this is separate from UC-12's automatic staleness check.
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   try {
-    await endSession(adminDb, id);
+    await endSession(adminDb, CLUB_ID, id);
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof NotLiveError) {

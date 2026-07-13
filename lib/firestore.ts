@@ -108,6 +108,21 @@ export interface SessionDoc {
 
   startedAt: number;
   endedAt: number | null;
+
+  /**
+   * Written once, at endSession(). LEADERBOARD.md Phase 1 — the ONE
+   * irreversible decision on that page: without a per-session
+   * snapshot, there is no way to ever recover what a player's rating
+   * was last month, so an Improvement board can never be built,
+   * however far in the future that gets approved. Collected starting
+   * now on purpose; not displayed anywhere yet — see LEADERBOARD.md's
+   * STATUS note. Guests are excluded (single-use ids, never meant to
+   * persist — LEADERBOARD.md: "guests never appear").
+   */
+  ratingSnapshot?: {
+    at: number;
+    ratings: Array<{ id: PlayerId; mu: number; sigma: number; gamesTotal: number }>;
+  };
 }
 
 /** Document clubs/{cid}/meta/pairStats. NO DECAY. Remembered forever. */
@@ -977,14 +992,37 @@ export class NotLiveError extends Error {
  * / and /admin no longer surface. The caller is expected to check
  * (and warn) before calling this; see the confirm text in
  * app/admin/sessions/page.tsx.
+ *
+ * Also writes the LEADERBOARD.md Phase 1 rating snapshot — every
+ * present member's end-of-session mu/sigma/gamesTotal. Data
+ * collection only; nothing reads this field yet.
  */
-export async function endSession(db: Firestore, sessionId: string): Promise<void> {
+export async function endSession(db: Firestore, clubId: string, sessionId: string, now = Date.now()): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
+
   await db.runTransaction(async (tx: Transaction) => {
-    const snap = await tx.get(sRef);
-    const s = snap.data() as SessionDoc | undefined;
+    const sSnap = await tx.get(sRef);
+    const s = sSnap.data() as SessionDoc | undefined;
     if (!s || s.status !== 'LIVE') throw new NotLiveError();
-    tx.update(sRef, { status: 'DONE', endedAt: Date.now() });
+
+    const presentIds = Object.keys(s.attendance).filter(id => !id.startsWith('guest-'));
+    const memberRefs = presentIds.map(id => db.doc(`clubs/${clubId}/players/${id}`));
+    const memberSnaps = await Promise.all(memberRefs.map(r => tx.get(r)));
+
+    const ratings: NonNullable<SessionDoc['ratingSnapshot']>['ratings'] = [];
+    presentIds.forEach((id, i) => {
+      const memberSnap = memberSnaps[i];
+      const sp = s.players[id];
+      if (!memberSnap.exists || !sp) return;
+      const gamesTotal = (memberSnap.data() as PublicPlayerDoc).gamesTotal;
+      ratings.push({ id, mu: sp.mu, sigma: sp.sigma, gamesTotal });
+    });
+
+    tx.update(sRef, {
+      status: 'DONE',
+      endedAt: now,
+      ratingSnapshot: { at: now, ratings },
+    });
   });
 }
 
