@@ -1,28 +1,29 @@
 // ============================================================
-// matchmaking.ts — Engine ghép trận
+// matchmaking.ts — Matchmaking engine
 //
-// THIẾT KẾ HAI TẦNG. Đây là toàn bộ bí mật:
+// TWO-TIER DESIGN. This is the whole secret:
 //
-//   TẦNG 1 — CỔNG (anh bảo vệ)   → ai được vào phòng chờ?  → CÔNG BẰNG
-//   TẦNG 2 — CHỌN (bà mối)       → trong phòng, chọn ai?   → TRỘN NGƯỜI
-//   TẦNG 3 — CHUÔNG              → có ai bị bỏ quên không?
+//   TIER 1 — GATE (the bouncer)      → who gets into the waiting room? → FAIR
+//   TIER 2 — PICK (the matchmaker)   → within the room, who gets picked? → MIX PEOPLE UP
+//   TIER 3 — ALARM                   → is anyone being forgotten?
 //
-// VÌ SAO PHẢI TÁCH LÀM HAI?
+// WHY SPLIT IT INTO TWO?
 //
-//   Nếu một cơ chế làm cả hai việc — ví dụ "lấy 4 người chờ lâu nhất" —
-//   thì bốn người ra sân cùng nhau → xuống sân cùng nhau → đồng hồ chờ
-//   reset cùng lúc → LẠI lên sân cùng nhau. Vĩnh viễn.
+//   If one mechanism did both jobs — e.g. "take the 4 people who've
+//   waited longest" — then four people would go onto a court together
+//   → come off together → their wait clocks reset at the same moment
+//   → they go back ONTO a court together. Forever.
 //
-//   Bạn xây một cái máy để phá bè phái, và nó tạo ra bè phái hoàn hảo
-//   hơn cả bè phái tự nhiên.
+//   You'd build a machine to break up cliques, and it would create
+//   cliques more perfect than natural ones.
 //
-//   Mô phỏng: FIFO thuần → 2.44 bạn cặp khác nhau/buổi, 9.3 cặp bị lặp.
-//             Hai tầng   → 3.58 bạn cặp (gần như mỗi trận một bạn mới), 0 lặp.
-//             Và số trận mỗi người KHÔNG đổi. Không mất gì cả.
+//   Simulation: pure FIFO   → 2.44 different partners/session, 9.3 repeated pairs.
+//               Two tiers   → 3.58 different partners (almost a new partner every game), 0 repeats.
+//               And the number of games per person DOESN'T change. Nothing lost.
 //
-// NGUYÊN TẮC GỐC:
-//   ĐỪNG DÙNG MỘT CON SỐ ĐỂ TRẢ LỜI HAI CÂU HỎI.
-//   Một cái là ràng buộc. Một cái là mục tiêu.
+// CORE PRINCIPLE:
+//   DON'T USE ONE NUMBER TO ANSWER TWO QUESTIONS.
+//   One is a constraint. The other is a goal.
 // ============================================================
 
 import type {
@@ -40,39 +41,42 @@ export interface MatchmakingInput {
   attendance: Map<PlayerId, Attendance>;
   pairStats: PairStats;
   config: MatchmakingConfig;
-  /** Ai đang trên sân KHÁC (không được xếp vào trận này). */
+  /** Who's on a DIFFERENT court right now (can't be assigned to this game). */
   busy: Set<PlayerId>;
-  /** Wildcard: người này YÊU CẦU đánh cùng người kia. Ràng buộc mềm, ưu tiên cao. */
+  /** Wildcard: this person REQUESTS to play with that person. Soft constraint, high priority. */
   wildcards?: Array<[PlayerId, PlayerId]>;
-  /** Cho phép inject RNG để test được (mặc định Math.random). */
+  /** Allows injecting an RNG for testability (defaults to Math.random). */
   rng?: () => number;
 }
 
 // ------------------------------------------------------------
-// TẦNG 1 — CỔNG
+// TIER 1 — GATE
 // ------------------------------------------------------------
 
 /**
- * Sắp xếp ba tầng. Tầng dưới CHỈ chạy khi tầng trên hoà.
+ * Sorts across three tiers. A lower tier ONLY runs when the tier
+ * above it ties.
  *
- *   1. SỐ TRẬN đã đánh (ít nhất → đứng đầu)
- *      ← đây là thứ NGƯỜI TA CÃI NHAU VỀ NÓ. Không ai đếm phút.
- *        (Mô phỏng: cổng theo số trận → chênh lệch trận 1.54.
- *                   cổng theo thời gian chờ → 1.61. Admin đoán đúng.)
+ *   1. GAMES played (fewest → goes first)
+ *      ← this is the thing PEOPLE ARGUE ABOUT. Nobody counts minutes.
+ *        (Simulation: gate by games played → game-count spread of 1.54.
+ *                     gate by wait time → 1.61. Admins guess right.)
  *
- *   2. THỜI GIAN CHỜ (lâu nhất → đứng trước)
- *      ← chỉ để phân xử giữa những người CÙNG số trận
+ *   2. WAIT TIME (longest → goes first)
+ *      ← only to break ties between people with the SAME game count
  *
- *   3. BỐC THĂM
- *      ← khi cả hai tầng trên đều hoà. Xảy ra khi 4 người vừa xuống
- *        sân cùng lúc (chờ = 0 y hệt nhau), và ở ĐẦU BUỔI (mọi người
- *        đều 0 trận, 0 phút).
+ *   3. RANDOM DRAW
+ *      ← when both tiers above tie. Happens when 4 people just came
+ *        off a court at the same moment (wait = 0 for all of them
+ *        identically), and at the START of a session (everyone at
+ *        0 games, 0 minutes).
  *
- *        Mô phỏng nói tầng 3 không ảnh hưởng kết quả (tầng chọn đã đủ
- *        thông minh để bù). Nhưng vẫn dùng ngẫu nhiên vì: (a) miễn phí,
- *        (b) bảo hiểm nếu sau này ai đó giảm wRepeatPartner,
- *        (c) nếu phá hoà theo tên thì "An" luôn đứng trước "Vũ" và
- *            sẽ có người để ý.
+ *        Simulation says tier 3 doesn't affect outcomes (tier 2, the
+ *        picker, is already smart enough to compensate). But it still
+ *        uses randomness because: (a) it's free, (b) it's insurance
+ *        in case someone later lowers wRepeatPartner, (c) breaking
+ *        ties by name would always put "An" ahead of "Vu", and
+ *        someone would notice.
  */
 export function buildQueue(
   input: MatchmakingInput,
@@ -82,7 +86,7 @@ export function buildQueue(
   const pool: Array<{ id: PlayerId; games: number; waitMs: number; r: number }> = [];
 
   for (const [id, a] of attendance) {
-    if (a.status !== 'AVAILABLE') continue;   // loại PLAYING, PAUSED, LEFT
+    if (a.status !== 'AVAILABLE') continue;   // excludes PLAYING, PAUSED, LEFT
     if (busy.has(id)) continue;
     pool.push({
       id,
@@ -93,19 +97,19 @@ export function buildQueue(
   }
 
   pool.sort((x, y) =>
-    x.games - y.games          // tầng 1
-    || y.waitMs - x.waitMs     // tầng 2
-    || x.r - y.r               // tầng 3
+    x.games - y.games          // tier 1
+    || y.waitMs - x.waitMs     // tier 2
+    || x.r - y.r               // tier 3
   );
 
   return pool.map(({ id, games, waitMs }) => ({ id, games, waitMs }));
 }
 
 // ------------------------------------------------------------
-// TẦNG 2 + 3 — CHỌN, có CHUÔNG
+// TIER 2 + 3 — PICK, with the ALARM
 // ------------------------------------------------------------
 
-/** Ba cách chia 4 người thành 2 đội. Chỉ có ba — không hơn. */
+/** Three ways to split 4 people into 2 teams. Only three — no more. */
 function splits(four: PlayerId[]): Array<[[PlayerId, PlayerId], [PlayerId, PlayerId]]> {
   const [a, b, c, d] = four;
   return [
@@ -115,7 +119,7 @@ function splits(four: PlayerId[]): Array<[[PlayerId, PlayerId], [PlayerId, Playe
   ];
 }
 
-/** Mọi tổ hợp k phần tử. */
+/** Every k-element combination. */
 function* combinations<T>(arr: T[], k: number): Generator<T[]> {
   const n = arr.length;
   if (k > n) return;
@@ -131,18 +135,18 @@ function* combinations<T>(arr: T[], k: number): Generator<T[]> {
 }
 
 /**
- * CHUẨN HOÁ THEO CO-ATTENDANCE — không phải đếm thô.
+ * NORMALIZED BY CO-ATTENDANCE — not a raw count.
  *
- *   Minh đi 15/16 buổi, chưa từng cặp với Tuấn  →  0/15 = khoảng trống LỚN
- *   Lan  đi  2/16 buổi, chưa từng cặp với Tuấn  →  0/2  = chưa nói lên gì
+ *   Minh attended 15/16 sessions, never partnered with Tuan → 0/15 = a BIG gap
+ *   Lan  attended  2/16 sessions, never partnered with Tuan → 0/2  = says nothing yet
  *
- * Đếm thô thấy cả hai đều = 0 và đối xử như nhau → nó đi lo cho Lan
- * trong khi Minh mới là lỗ hổng thật.
+ * A raw count sees both as = 0 and treats them the same → it goes
+ * worrying about Lan when Minh is the real gap.
  *
- * Một phép chia. Đáng 2.7% độ phủ.
+ * One division. Worth 2.7% of coverage.
  *
- * KHÔNG DECAY. "An và Bình đã đánh với nhau" — sự thật đó KHÔNG HẾT HẠN.
- * (Mô phỏng: decay 0.9/tuần làm độ phủ TỤT từ 78.8% xuống 76.9%.)
+ * NO DECAY. "An and Binh have played together" — that fact does NOT expire.
+ * (Simulation: 0.9/week decay made coverage DROP from 78.8% to 76.9%.)
  */
 function repetition(stats: PairStats, a: PlayerId, b: PlayerId, kind: 'partnered' | 'opposed'): number {
   const s = stats[pairKey(a, b)];
@@ -156,29 +160,31 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
   const queue = buildQueue(input);
   if (queue.length < 4) return null;
 
-  // ---- CỬA SỔ ----
+  // ---- WINDOW ----
   const window = queue.slice(0, Math.min(config.windowSize, queue.length));
 
-  // ---- CHUÔNG: ai chờ quá lâu → BẮT BUỘC vào trận này ----
+  // ---- ALARM: whoever has waited too long → MUST be in this game ----
   const starveMs = config.starvationMinutes * MS_PER_MIN;
   const forced = queue.filter(q => q.waitMs > starveMs).slice(0, 2).map(q => q.id);
 
-  // Người bị "đói" phải nằm trong cửa sổ, kể cả khi họ không lọt top-8.
+  // Whoever is "starving" must be included in the window, even if they
+  // didn't make the top 8.
   const candidateIds = new Set(window.map(w => w.id));
   for (const f of forced) candidateIds.add(f);
   const candidates = [...candidateIds];
 
   const waitOf = new Map(queue.map(q => [q.id, q.waitMs]));
 
-  // ---- WILDCARD: cặp được yêu cầu ----
+  // ---- WILDCARD: requested pair ----
   const wildSet = new Set(
     (input.wildcards ?? []).map(([a, b]) => pairKey(a, b)),
   );
 
-  // ---- DUYỆT HẾT. C(8,4) × 3 = 210 phương án. 0.4ms. ----
-  // Không cần simulated annealing. Không cần heuristic.
-  // Đây là trường hợp hiếm hoi mà đáp án đúng là cách ngu ngốc nhất:
-  // thử hết, và bạn ĐẢM BẢO tìm được phương án tối ưu tuyệt đối.
+  // ---- EXHAUSTIVE SEARCH. C(8,4) × 3 = 210 options. 0.4ms. ----
+  // No need for simulated annealing. No need for a heuristic.
+  // This is the rare case where the correct answer is the dumbest
+  // approach: try everything, and you're GUARANTEED to find the
+  // absolute optimum.
   type Scored = {
     four: PlayerId[]; teamA: [PlayerId, PlayerId]; teamB: [PlayerId, PlayerId];
     cost: number; rp: number; ro: number; imb: number; waitSum: number; probA: number;
@@ -186,8 +192,8 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
   const scored: Scored[] = [];
 
   for (const four of combinations(candidates, 4)) {
-    // CHUÔNG là ràng buộc CỨNG: nếu ai đó đang đói, mọi phương án
-    // không chứa họ đều bị loại thẳng.
+    // The ALARM is a HARD constraint: if someone is starving, every
+    // option that doesn't include them is thrown out outright.
     if (forced.length && !forced.every(f => four.includes(f))) {
       if (!four.includes(forced[0])) continue;
     }
@@ -199,7 +205,7 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
     const waitSum = four4.reduce((s, id) => s + (waitOf.get(id) ?? 0), 0) / MS_PER_MIN;
     const maxGames = Math.max(...four4.map(id => attendance.get(id)!.gamesToday));
 
-    // Đừng dồn cả 4 nữ vào một sân (WD gần như bất khả thi với 3-5 nữ/22 người)
+    // Don't stack all 4 women onto one court (WD is nearly impossible with 3-5 women/22 people)
     const allWomen = ps.every(p => p.gender === 'F');
 
     const useBalance = canShowPrediction(ps);
@@ -215,12 +221,12 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
       const rb = teamRating(players.get(tB[0])!, players.get(tB[1])!);
       const probA = winProbability(ra, rb);
 
-      // W_BALANCE = 0 khi rating chưa hội tụ.
-      // Không phải vì cân bằng không quan trọng — mà vì lúc đó
-      // P(thắng) luôn ≈ 0.5 và HOÀN TOÀN VÔ NGHĨA.
+      // W_BALANCE = 0 when rating hasn't converged yet.
+      // Not because balance doesn't matter — but because at that
+      // point P(win) is always ≈ 0.5 and COMPLETELY MEANINGLESS.
       const imb = useBalance ? Math.abs(probA - 0.5) : 0;
 
-      // Wildcard: nếu cặp này được yêu cầu → thưởng lớn
+      // Wildcard: if this pair was requested → a large bonus
       const wild = (wildSet.has(pairKey(tA[0], tA[1])) ? 1 : 0)
                  + (wildSet.has(pairKey(tB[0], tB[1])) ? 1 : 0);
 
@@ -239,12 +245,13 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
 
   if (!scored.length) return null;
 
-  // ---- CHỌN NGẪU NHIÊN TRONG TOP-N ----
-  // Chống "khoá cứng hàng chờ": nếu luôn lấy top-1, các phương án
-  // cost bằng nhau y hệt (rất hay xảy ra ở đầu buổi, mọi thứ đều 0)
-  // sẽ luôn trả về phương án TÌM THẤY ĐẦU TIÊN — và combinations()
-  // duyệt theo thứ tự cố định. Kết quả: người đứng đầu danh sách
-  // luôn được chọn, tuần nào cũng vậy.
+  // ---- PICK RANDOMLY AMONG THE TOP-N ----
+  // Prevents "the queue locking in": if we always took the #1 option,
+  // options with identical cost (very common at the start of a
+  // session, when everything is 0) would always return the FIRST
+  // option found — and combinations() iterates in a fixed order. The
+  // result: whoever is first in the list always gets picked, week
+  // after week.
   scored.sort((a, b) => a.cost - b.cost);
   const top = scored.slice(0, Math.max(1, config.topN));
   const pick = top[Math.floor(rng() * top.length)];
@@ -269,19 +276,19 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
 }
 
 // ------------------------------------------------------------
-// CÂU GIẢI THÍCH — tính năng quan trọng nhất của cả app
+// THE REASON SENTENCE — the single most important feature of the whole app
 // ------------------------------------------------------------
 
 /**
- * Không có câu này, app là KẺ ĐỘC TÀI.
- * Có nó, app là TRỌNG TÀI.
+ * Without this sentence, the app is a DICTATOR.
+ * With it, the app is a REFEREE.
  *
- * Người ta cãi trọng tài. Nhưng người ta CHẤP NHẬN trọng tài.
+ * People argue with a referee. But people ACCEPT a referee.
  *
- * App chỉ chạy 1 tiếng/tuần — nó không có thời gian để "dần dần được
- * tin tưởng". Nó phải thuyết phục ngay ở trận đầu tiên.
+ * The app only runs 1 hour/week — it doesn't have time to "gradually
+ * earn trust". It has to convince people on the very first game.
  *
- * Nửa ngày code. Tỉ lệ (giá trị / công sức) cao nhất trong dự án.
+ * Half a day of code. The highest (value / effort) ratio in the project.
  */
 function explain(
   pick: { four: PlayerId[]; teamA: [PlayerId, PlayerId]; teamB: [PlayerId, PlayerId]; probA: number },
@@ -294,36 +301,36 @@ function explain(
   const name = (id: PlayerId) => players.get(id)?.name ?? id;
   const parts: string[] = [];
 
-  // 1. Cặp nào mới?
+  // 1. Which pair is new?
   for (const t of [pick.teamA, pick.teamB]) {
     const s = stats[pairKey(t[0], t[1])];
     if (!s || s.partnered === 0) {
-      parts.push(`${name(t[0])} & ${name(t[1])} chưa từng đánh cặp.`);
+      parts.push(`${name(t[0])} & ${name(t[1])} have never partnered.`);
     }
   }
 
-  // 2. Ai bị đói? (ưu tiên nói cái này — nó giải thích một quyết định "lạ")
+  // 2. Who's starving? (mention this first — it explains a "strange" decision)
   if (forced.length) {
     const f = forced[0];
     const mins = Math.round((waitOf.get(f) ?? 0) / MS_PER_MIN);
-    parts.unshift(`${name(f)} đã chờ ${mins} phút — ưu tiên tuyệt đối.`);
+    parts.unshift(`${name(f)} has waited ${mins} min — absolute priority.`);
   } else {
-    // 3. Ai chờ lâu nhất trong 4 người?
+    // 3. Who among the 4 has waited longest?
     let longest = pick.four[0];
     for (const id of pick.four) {
       if ((waitOf.get(id) ?? 0) > (waitOf.get(longest) ?? 0)) longest = id;
     }
     const mins = Math.round((waitOf.get(longest) ?? 0) / MS_PER_MIN);
-    if (mins >= 5) parts.push(`${name(longest)} chờ lâu nhất (${mins} phút).`);
+    if (mins >= 5) parts.push(`${name(longest)} has waited longest (${mins} min).`);
   }
 
-  // 4. Dự đoán — CHỈ khi rating đã hội tụ.
-  // Một dự đoán "62–38" dựa trên 3 trận là một LỜI NÓI DỐI, và nó sẽ
-  // sai công khai trước mặt 22 người. Bạn chỉ mất niềm tin một lần thôi.
+  // 4. Prediction — ONLY once rating has converged.
+  // A "62–38" prediction based on 3 games is a LIE, and it will fail
+  // publicly in front of 22 people. You only lose that trust once.
   if (showPrediction) {
     const a = Math.round(pick.probA * 100);
-    parts.push(`Dự đoán ${a}–${100 - a}.`);
+    parts.push(`Predicted ${a}–${100 - a}.`);
   }
 
-  return parts.join(' ') || 'Cân bằng số trận và thời gian chờ.';
+  return parts.join(' ') || 'Balances games played and wait time.';
 }

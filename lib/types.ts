@@ -1,10 +1,10 @@
 // ============================================================
-// types.ts — Nguồn sự thật duy nhất về hình dạng dữ liệu
+// types.ts — The single source of truth for data shapes
 // ============================================================
 
 export type PlayerId = string;
 
-// ---------- CÂU LẠC BỘ (đổi vài tháng một lần) ----------
+// ---------- CLUB (changes every few months) ----------
 
 export interface ClubPlayer {
   id: PlayerId;
@@ -12,67 +12,67 @@ export interface ClubPlayer {
   gender: 'M' | 'F';
   div: 1 | 2;
 
-  /** Thứ hạng do admin xếp TRONG div (1 = mạnh nhất). Dùng để seed rating. */
+  /** Rank assigned by the admin WITHIN the div (1 = strongest). Used to seed rating. */
   seedRank: number;
 
-  /** TrueSkill. Ẩn với người chơi ít nhất 3 tháng. */
+  /** TrueSkill. Hidden from the player for at least 3 months. */
   mu: number;
   sigma: number;
 
-  /** Tổng số trận đã đánh (mọi buổi). Dùng để biết rating đã hội tụ chưa. */
+  /** Total games played (across all sessions). Used to know whether rating has converged. */
   gamesTotal: number;
 
-  /** Buổi cuối cùng người này có mặt. Để sắp "ai lâu chưa đến". */
+  /** The last session this person attended. Used to sort "who's been away longest". */
   lastPlayedAt: number | null; // epoch ms
 
   isGuest: boolean;
   active: boolean;
 }
 
-// ---------- LỊCH SỬ CẶP ĐÔI (xuyên buổi, KHÔNG decay) ----------
+// ---------- PAIR HISTORY (across sessions, NO decay) ----------
 
 export interface PairStats {
-  /** khoá: pairKey(a, b) */
+  /** key: pairKey(a, b) */
   [key: string]: {
-    partnered: number;   // số lần đánh CẶP
-    opposed: number;     // số lần đối đầu
-    coPresent: number;   // số buổi CÙNG có mặt  ← mẫu số chuẩn hoá
+    partnered: number;   // number of times PARTNERED
+    opposed: number;     // number of times faced as opponents
+    coPresent: number;   // number of sessions BOTH present  ← the normalization denominator
   };
 }
 
-/** Khoá cặp, luôn sắp xếp để (a,b) và (b,a) là một. */
+/** Pair key, always sorted so (a,b) and (b,a) are the same. */
 export function pairKey(a: PlayerId, b: PlayerId): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-// ---------- BUỔI CHƠI ----------
+// ---------- SESSION ----------
 
 export type AttendanceStatus =
-  | 'AVAILABLE'   // có mặt, sẵn sàng được xếp
-  | 'PLAYING'     // đang trên sân
-  | 'PAUSED'      // có mặt nhưng tạm không xếp (WC, nghỉ)
-  | 'LEFT';       // đã về
+  | 'AVAILABLE'   // present, ready to be assigned
+  | 'PLAYING'     // currently on a court
+  | 'PAUSED'      // present but temporarily not assignable (bathroom, break)
+  | 'LEFT';       // gone home
 
 export interface Attendance {
   playerId: PlayerId;
   status: AttendanceStatus;
 
-  checkedInAt: number;    // epoch ms — QUAN TRỌNG: đây là mốc chờ ban đầu
+  checkedInAt: number;    // epoch ms — IMPORTANT: this is the initial wait marker
   leftAt: number | null;
 
-  /** Số trận đã đánh TỐI NAY. Gồm cả trận ghi ở chế độ RECORD. */
+  /** Games played TONIGHT. Includes games logged in RECORD mode. */
   gamesToday: number;
 
   /**
-   * Thời điểm rời sân lần cuối (hoặc checkedInAt nếu chưa đánh trận nào).
-   * waitTime = now - freeAt
+   * The moment they last left a court (or checkedInAt if they haven't
+   * played a game yet). waitTime = now - freeAt
    */
   freeAt: number;
 }
 
 export interface Court {
   index: number;                    // 0, 1, 2...
-  players: [PlayerId, PlayerId, PlayerId, PlayerId] | null;  // null = trống
+  players: [PlayerId, PlayerId, PlayerId, PlayerId] | null;  // null = empty
   teamA: [PlayerId, PlayerId] | null;
   teamB: [PlayerId, PlayerId] | null;
   startedAt: number | null;
@@ -88,10 +88,10 @@ export interface Session {
   targetHeadcount: number;
   mode: SessionMode;
 
-  /** Ai được admin chọn cho buổi này (~22 người). */
+  /** Who the admin selected for this session (~22 people). */
   roster: PlayerId[];
 
-  /** Ai đang ở đâu. Khoá = playerId. */
+  /** Who's where. Key = playerId. */
   attendance: Record<PlayerId, Attendance>;
 
   courts: Court[];
@@ -100,7 +100,7 @@ export interface Session {
   endedAt: number | null;
 }
 
-// ---------- TRẬN ĐẤU ----------
+// ---------- GAME ----------
 
 export interface Game {
   id: string;
@@ -110,16 +110,16 @@ export interface Game {
   teamA: [PlayerId, PlayerId];
   teamB: [PlayerId, PlayerId];
 
-  /** null = chưa ghi kết quả (cho phép — không được chặn việc xếp trận tiếp) */
+  /** null = result not recorded yet (allowed — must not block assigning the next game) */
   winner: 'A' | 'B' | null;
 
-  /** Điểm của đội THUA (0-29). Tuỳ chọn. Lưu từ ngày đầu dù chưa dùng. */
+  /** The LOSING team's score (0-29). Optional. Stored from day one even though unused so far. */
   scoreLoser: number | null;
 
-  /** Dự đoán của app lúc xếp trận. Để đo calibration sau này. */
+  /** The app's prediction at assignment time. For measuring calibration later. */
   predictedProbA: number | null;
 
-  /** App có tự xếp trận này không, hay người tự chia. */
+  /** Whether the app assigned this game itself, or a human split it. */
   assignedByApp: boolean;
 
   startedAt: number;
@@ -127,7 +127,7 @@ export interface Game {
   status: 'OK' | 'VOID';
 }
 
-// ---------- LOG GỢI Ý (metric quan trọng nhất) ----------
+// ---------- SUGGESTION LOG (the most important metric) ----------
 
 export interface SuggestionLog {
   id: string;
@@ -139,17 +139,17 @@ export interface SuggestionLog {
   suggestedTeams: { a: [PlayerId, PlayerId]; b: [PlayerId, PlayerId] };
   reason: string;
 
-  /** false = người dùng bấm "Đổi". ĐÂY LÀ ĐIỂM SỐ THẬT CỦA THUẬT TOÁN. */
+  /** false = the user tapped "Swap". THIS IS THE ALGORITHM'S REAL SCORE. */
   accepted: boolean;
 
-  /** Nếu bị Đổi, người dùng chọn ai. */
+  /** If swapped, who the user picked instead. */
   actual: [PlayerId, PlayerId, PlayerId, PlayerId] | null;
 }
 
-// ---------- CẤU HÌNH THUẬT TOÁN ----------
+// ---------- ALGORITHM CONFIG ----------
 
 export interface MatchmakingConfig {
-  /** Cửa sổ: lấy bao nhiêu người đầu từ hàng chờ đã sắp xếp. */
+  /** Window: how many people to take from the front of the sorted queue. */
   windowSize: number;
 
   wRepeatPartner: number;
@@ -157,16 +157,16 @@ export interface MatchmakingConfig {
   wBalance: number;
   wWait: number;
 
-  /** Chờ quá bao nhiêu PHÚT thì BẮT BUỘC được xếp vào trận tiếp. */
+  /** Waiting more than this many MINUTES → MUST be included in the next game. */
   starvationMinutes: number;
 
-  /** Không dồn cả 4 nữ vào một sân. */
+  /** Don't stack all 4 women onto one court. */
   penaltyAllWomen: number;
 
-  /** Chỉ dùng W_BALANCE khi cả 4 người có sigma dưới ngưỡng này. */
+  /** Only use W_BALANCE when all 4 people have sigma below this threshold. */
   balanceSigmaThreshold: number;
 
-  /** Chọn ngẫu nhiên trong top-N phương án tốt nhất (chống khoá cứng). */
+  /** Pick randomly among the top-N best options (prevents the queue from locking in). */
   topN: number;
 }
 
@@ -182,7 +182,7 @@ export const DEFAULT_CONFIG: MatchmakingConfig = {
   topN: 3,
 };
 
-// ---------- KẾT QUẢ GỢI Ý ----------
+// ---------- SUGGESTION RESULT ----------
 
 export interface Suggestion {
   four: [PlayerId, PlayerId, PlayerId, PlayerId];
@@ -190,10 +190,10 @@ export interface Suggestion {
   teamB: [PlayerId, PlayerId];
   predictedProbA: number;
 
-  /** Câu giải thích hiện trên màn hình. Tính năng quan trọng nhất. */
+  /** The reason sentence shown on screen. The single most important feature. */
   reason: string;
 
-  /** Để debug / tinh chỉnh trọng số. */
+  /** For debugging / tuning the weights. */
   breakdown: {
     cost: number;
     repeatPartner: number;

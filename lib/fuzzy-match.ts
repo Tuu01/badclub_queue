@@ -1,6 +1,6 @@
 // ============================================================
-// fuzzy-match.ts — dán danh sách từ Zalo, ghép mờ vào 55 người.
-// "Nếu chỉ xây MỘT tính năng ở màn này, xây cái này." — PROMPT.md
+// fuzzy-match.ts — paste a list from Zalo, fuzzy-match it against the 55.
+// "If you only build one feature on this screen, build this." — PROMPT.md
 // ============================================================
 
 function normalizeVN(s: string): string {
@@ -47,7 +47,7 @@ export interface MatchedLine {
   alternatives: MatchCandidate[];
 }
 
-/** Mỗi dòng (hoặc mục phân tách bởi dấu phẩy) trong `pasted` → gợi ý khớp tốt nhất trong roster. */
+/** Each line (or comma-separated item) in `pasted` → the best matching roster candidate. */
 export function matchPastedNames(pasted: string, roster: RosterPerson[]): MatchedLine[] {
   const lines = pasted
     .split(/[\n,]/)
@@ -62,7 +62,7 @@ export function matchPastedNames(pasted: string, roster: RosterPerson[]): Matche
       .map(p => ({ id: p.id, name: p.name, distance: levenshtein(normRaw, p.norm) }))
       .sort((a, b) => a.distance - b.distance);
     const best = scored[0] ?? null;
-    // Ngưỡng nới theo độ dài tên — tên ngắn cần khớp chặt hơn.
+    // Threshold scales with name length — short names need a tighter match.
     const threshold = Math.max(1, Math.floor(normRaw.length * 0.3));
     return {
       raw,

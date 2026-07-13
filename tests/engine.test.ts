@@ -9,9 +9,9 @@ function check(name: string, cond: boolean, extra = '') {
   else { fail++; console.log(`  ✗ ${name} ${extra}`); }
 }
 
-// ---------- dựng 22 người ----------
-const NAMES = ['Cường','Hà','Lan','Nam','An','Sơn','Dũng','Minh','Tuấn','Hải','Bình',
-               'Thảo','Phong','Quân','Tú','Vy','Khoa','Yến','Đạt','Uyên','Giang','Kỳ'];
+// ---------- build 22 people ----------
+const NAMES = ['Alex','Blake','Casey','Drew','Emery','Frankie','Gray','Harper','Ivy','Jules','Kai',
+               'Logan','Morgan','Noel','Oakley','Parker','Quinn','Riley','Sam','Taylor','Uma','Val'];
 
 function makePlayers(): Map<PlayerId, ClubPlayer> {
   const m = new Map<PlayerId, ClubPlayer>();
@@ -36,121 +36,121 @@ function att(id: PlayerId, games: number, waitMin: number, status: Attendance['s
 }
 
 // =============================================================
-console.log('\n■ TẦNG 1 — CỔNG (sắp xếp)');
+console.log('\n■ TIER 1 — GATE (sorting)');
 {
   const players = makePlayers();
   const a = new Map<PlayerId, Attendance>([
-    ['Lan',    att('Lan', 2, 22)],   // chờ LÂU NHẤT nhưng 2 trận
-    ['Cường',  att('Cường', 1, 19)],
-    ['Hà',     att('Hà', 1, 17)],
-    ['Nam',    att('Nam', 2, 14)],
-    ['Bình',   att('Bình', 4, 0)],   // vừa xuống sân
+    ['Casey',    att('Casey', 2, 22)],   // waited LONGEST but 2 games
+    ['Alex',  att('Alex', 1, 19)],
+    ['Blake',     att('Blake', 1, 17)],
+    ['Drew',    att('Drew', 2, 14)],
+    ['Kai',   att('Kai', 4, 0)],   // just came off a court
   ]);
   const q = buildQueue({ now: NOW, players, attendance: a, pairStats: {},
                          config: DEFAULT_CONFIG, busy: new Set(), rng: () => 0.5 });
 
-  check('số trận thắng thời gian chờ (Cường 1 trận đứng trên Lan 2 trận, dù Lan chờ lâu hơn)',
-        q[0].id === 'Cường' && q[1].id === 'Hà' && q[2].id === 'Lan');
-  check('người vừa xuống sân rơi xuống cuối (không cần luật riêng)', q[q.length - 1].id === 'Bình');
+  check('games played beats wait time (Alex with 1 game ranks above Casey with 2, even though Casey waited longer)',
+        q[0].id === 'Alex' && q[1].id === 'Blake' && q[2].id === 'Casey');
+  check('whoever just came off a court drops to the back (no special rule needed)', q[q.length - 1].id === 'Kai');
 }
 
 // =============================================================
-console.log('\n■ TẦNG 1 — loại người không AVAILABLE');
+console.log('\n■ TIER 1 — excludes anyone not AVAILABLE');
 {
   const players = makePlayers();
   const a = new Map<PlayerId, Attendance>([
-    ['Cường', att('Cường', 0, 10)],
-    ['Hà',    att('Hà', 0, 10, 'PAUSED')],   // đi WC
-    ['Lan',   att('Lan', 0, 10, 'PLAYING')],
-    ['Nam',   att('Nam', 0, 10, 'LEFT')],
+    ['Alex', att('Alex', 0, 10)],
+    ['Blake',    att('Blake', 0, 10, 'PAUSED')],   // bathroom break
+    ['Casey',   att('Casey', 0, 10, 'PLAYING')],
+    ['Drew',   att('Drew', 0, 10, 'LEFT')],
   ]);
   const q = buildQueue({ now: NOW, players, attendance: a, pairStats: {},
                          config: DEFAULT_CONFIG, busy: new Set(), rng: () => 0.5 });
-  check('PAUSED / PLAYING / LEFT đều bị loại khỏi hàng chờ', q.length === 1 && q[0].id === 'Cường');
+  check('PAUSED / PLAYING / LEFT are all excluded from the queue', q.length === 1 && q[0].id === 'Alex');
 }
 
 // =============================================================
-console.log('\n■ TẦNG 2 — CHỌN (tránh lặp cặp)');
+console.log('\n■ TIER 2 — PICK (avoids repeating pairs)');
 {
   const players = makePlayers();
-  const ids = ['Cường','Hà','Lan','Nam','An','Sơn','Dũng','Minh'];
+  const ids = ['Alex','Blake','Casey','Drew','Emery','Frankie','Gray','Harper'];
   const a = new Map<PlayerId, Attendance>(ids.map((id, i) => [id, att(id, 1, 20 - i)]));
 
-  // Cường & Hà đã đánh cặp 5 lần trong 8 buổi cùng có mặt → rất "cũ"
+  // Alex & Blake have partnered 5 times across 8 co-present sessions → very "stale"
   const stats: PairStats = {
-    [pairKey('Cường','Hà')]: { partnered: 5, opposed: 0, coPresent: 8 },
+    [pairKey('Alex','Blake')]: { partnered: 5, opposed: 0, coPresent: 8 },
   };
 
-  let cuongHaTogether = 0;
+  let alexBlakeTogether = 0;
   for (let t = 0; t < 200; t++) {
     const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: stats,
                              config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random })!;
     const sameTeam = [s.teamA, s.teamB].some(
-      tm => tm.includes('Cường') && tm.includes('Hà'));
-    if (sameTeam) cuongHaTogether++;
+      tm => tm.includes('Alex') && tm.includes('Blake'));
+    if (sameTeam) alexBlakeTogether++;
   }
-  check(`cặp đã lặp nhiều KHÔNG bị ghép lại (${cuongHaTogether}/200 lần)`, cuongHaTogether === 0,
-        `→ ${cuongHaTogether}`);
+  check(`a heavily-repeated pair is NOT re-paired (${alexBlakeTogether}/200 times)`, alexBlakeTogether === 0,
+        `→ ${alexBlakeTogether}`);
 }
 
 // =============================================================
-console.log('\n■ CHUẨN HOÁ co-attendance (không phải đếm thô)');
+console.log('\n■ CO-ATTENDANCE NORMALIZATION (not a raw count)');
 {
   const players = makePlayers();
-  // CHỈ 4 người → thuật toán BUỘC phải chọn cả 4, chỉ được quyết cách CHIA ĐỘI.
-  // Ba cách chia: (C-H | L-N), (C-L | H-N), (C-N | H-L)
-  const ids = ['Cường','Hà','Lan','Nam'];
+  // ONLY 4 people → the algorithm is FORCED to pick all 4, it can only decide how to SPLIT TEAMS.
+  // Three splits: (A-B | C-D), (A-C | B-D), (A-D | B-C)
+  const ids = ['Alex','Blake','Casey','Drew'];
   const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 1, 10)]));
 
-  // Đếm THÔ: cả hai cặp đều = 2 lần → trông giống hệt nhau.
-  // Chuẩn hoá: Cường-Hà = 2/20 = 0.10 (thoáng) · Lan-Nam = 2/3 = 0.67 (dày)
-  // Cách chia (C-H | L-N) gộp CẢ HAI → cost cao nhất → phải bị tránh.
+  // RAW count: both pairs = 2 times → look identical.
+  // Normalized: Alex-Blake = 2/20 = 0.10 (sparse) · Casey-Drew = 2/3 = 0.67 (dense)
+  // The split (A-B | C-D) combines BOTH → highest cost → must be avoided.
   const stats: PairStats = {
-    [pairKey('Cường','Hà')]: { partnered: 2, opposed: 0, coPresent: 20 },
-    [pairKey('Lan','Nam')]:  { partnered: 2, opposed: 0, coPresent: 3 },
+    [pairKey('Alex','Blake')]: { partnered: 2, opposed: 0, coPresent: 20 },
+    [pairKey('Casey','Drew')]:  { partnered: 2, opposed: 0, coPresent: 3 },
   };
 
-  const cfg = { ...DEFAULT_CONFIG, topN: 1 };   // luôn lấy phương án tốt nhất
+  const cfg = { ...DEFAULT_CONFIG, topN: 1 };   // always take the best option
   const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: stats,
                            config: cfg, busy: new Set(), rng: () => 0 })!;
-  const badSplit = [s.teamA, s.teamB].some(tm => tm.includes('Cường') && tm.includes('Hà'))
-                && [s.teamA, s.teamB].some(tm => tm.includes('Lan') && tm.includes('Nam'));
-  check('tránh cách chia gộp CẢ HAI cặp cũ', !badSplit,
+  const badSplit = [s.teamA, s.teamB].some(tm => tm.includes('Alex') && tm.includes('Blake'))
+                && [s.teamA, s.teamB].some(tm => tm.includes('Casey') && tm.includes('Drew'));
+  check('avoids the split that combines BOTH stale pairs', !badSplit,
         `→ ${s.teamA.join('+')} vs ${s.teamB.join('+')}`);
 
-  // Kiểm tra trực tiếp phép chuẩn hoá: cặp "dày" phải bị phạt nặng hơn
-  const dense  = 2 / 3;    // Lan-Nam
-  const sparse = 2 / 20;   // Cường-Hà
-  check(`chuẩn hoá: cặp dày (2/3=${dense.toFixed(2)}) bị phạt nặng hơn cặp thoáng (2/20=${sparse.toFixed(2)})`,
+  // Directly check the normalization: the "dense" pair must be penalized more heavily
+  const dense  = 2 / 3;    // Casey-Drew
+  const sparse = 2 / 20;   // Alex-Blake
+  check(`normalization: the dense pair (2/3=${dense.toFixed(2)}) is penalized more than the sparse pair (2/20=${sparse.toFixed(2)})`,
         dense > sparse * 5);
-  console.log(`     → chọn: ${s.teamA.join('+')} vs ${s.teamB.join('+')}`);
+  console.log(`     → picked: ${s.teamA.join('+')} vs ${s.teamB.join('+')}`);
 }
 
 // =============================================================
-console.log('\n■ TẦNG 3 — CHUÔNG (ràng buộc đói)');
+console.log('\n■ TIER 3 — ALARM (starvation constraint)');
 {
   const players = makePlayers();
-  const ids = ['Cường','Hà','Lan','Nam','An','Sơn','Dũng','Minh','Tuấn','Hải'];
+  const ids = ['Alex','Blake','Casey','Drew','Emery','Frankie','Gray','Harper','Ivy','Jules'];
   const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 0, 2)]));
-  // Kỳ: 0 trận nhưng đã chờ 40 phút → phải được ép vào
-  a.set('Kỳ', att('Kỳ', 3, 40));   // 3 trận → lẽ ra rơi khỏi cửa sổ
+  // Val: 0 games but has waited 40 minutes → must be forced in
+  a.set('Val', att('Val', 3, 40));   // 3 games → would otherwise fall out of the window
 
   let included = 0;
   for (let t = 0; t < 100; t++) {
     const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: {},
                              config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random })!;
-    if (s.four.includes('Kỳ')) included++;
+    if (s.four.includes('Val')) included++;
   }
-  check(`người chờ >25 phút LUÔN được ép vào, kể cả khi đã đánh nhiều trận (${included}/100)`,
+  check(`anyone waiting >25 min is ALWAYS forced in, even with many games played (${included}/100)`,
         included === 100, `→ ${included}`);
 }
 
 // =============================================================
-console.log('\n■ Không dồn 4 nữ vào một sân');
+console.log('\n■ Never stacks 4 women onto one court');
 {
   const players = makePlayers();
-  // Uyên, Giang, Kỳ, Yến là nữ (index >= 18)
-  const ids = ['Yến','Đạt','Uyên','Giang','Kỳ','Cường','Hà','Lan'];
+  // Taylor, Uma, Val, Riley are female (index >= 18)
+  const ids = ['Riley','Sam','Taylor','Uma','Val','Alex','Blake','Casey'];
   const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 0, 10)]));
 
   let allW = 0;
@@ -159,20 +159,20 @@ console.log('\n■ Không dồn 4 nữ vào một sân');
                              config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random })!;
     if (s.four.every(id => players.get(id)!.gender === 'F')) allW++;
   }
-  check(`không bao giờ dồn 4 nữ cùng sân (${allW}/200)`, allW === 0, `→ ${allW}`);
+  check(`never stacks 4 women onto the same court (${allW}/200)`, allW === 0, `→ ${allW}`);
 }
 
 // =============================================================
-console.log('\n■ Câu giải thích');
+console.log('\n■ The reason sentence');
 {
   const players = makePlayers();
-  const ids = ['Cường','Hà','Lan','Nam','An','Sơn','Dũng','Minh'];
+  const ids = ['Alex','Blake','Casey','Drew','Emery','Frankie','Gray','Harper'];
   const a = new Map<PlayerId, Attendance>(ids.map((id, i) => [id, att(id, 1, 20 - i * 2)]));
   const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: {},
                            config: DEFAULT_CONFIG, busy: new Set(), rng: () => 0.1 })!;
-  check('có câu giải thích', s.reason.length > 10);
-  check('KHÔNG hiện dự đoán % khi rating chưa hội tụ (sigma=8 > 4)',
-        !s.reason.includes('Dự đoán'), `→ "${s.reason}"`);
+  check('has a reason sentence', s.reason.length > 10);
+  check('does NOT show a % prediction when rating hasn\'t converged (sigma=8 > 4)',
+        !s.reason.includes('Predicted'), `→ "${s.reason}"`);
   console.log(`     → "${s.reason}"`);
 }
 
@@ -184,24 +184,24 @@ console.log('\n■ RATING — TrueSkill');
     gamesTotal: 0, lastPlayedAt: null, isGuest: false, active: true,
   });
 
-  // Hai đội bằng nhau → 50-50
+  // Two equal teams → 50-50
   const pr1 = winProbability(teamRating(p(50, 3), p(50, 3)), teamRating(p(50, 3), p(50, 3)));
-  check('hai đội bằng nhau → 50%', Math.abs(pr1 - 0.5) < 0.01, `→ ${pr1.toFixed(3)}`);
+  check('two equal teams → 50%', Math.abs(pr1 - 0.5) < 0.01, `→ ${pr1.toFixed(3)}`);
 
-  // Đội mạnh hơn rõ rệt, sigma nhỏ → dự đoán tự tin
+  // Clearly stronger team, small sigma → confident prediction
   const pr2 = winProbability(teamRating(p(65, 2.5), p(65, 2.5)), teamRating(p(40, 2.5), p(40, 2.5)));
-  check('chênh lệch lớn + sigma nhỏ → dự đoán tự tin (>90%)', pr2 > 0.90, `→ ${pr2.toFixed(3)}`);
+  check('large gap + small sigma → confident prediction (>90%)', pr2 > 0.90, `→ ${pr2.toFixed(3)}`);
 
-  // Chênh lệch THỰC TẾ (5 điểm mỗi người), sigma nhỏ → dự đoán có tín hiệu
+  // The SAME real gap (5 points each), small sigma → prediction carries signal
   const prSure   = winProbability(teamRating(p(55, 2.5), p(55, 2.5)), teamRating(p(50, 2.5), p(50, 2.5)));
-  // CÙNG chênh lệch, nhưng sigma ban đầu (8.0) → app phải bớt tự tin
+  // SAME gap, but initial sigma (8.0) → the app must be less confident
   const prUnsure = winProbability(teamRating(p(55, 8.0), p(55, 8.0)), teamRating(p(50, 8.0), p(50, 8.0)));
-  check(`CÙNG chênh lệch, sigma lớn → kéo về gần 50%: ${prSure.toFixed(3)} (σ=2.5) → ${prUnsure.toFixed(3)} (σ=8)`,
-        prUnsure < prSure - 0.15,   // độ tự tin phải TỤT RÕ RỆT, không phải một ngưỡng bịa ra
+  check(`SAME gap, large sigma → pulled back toward 50%: ${prSure.toFixed(3)} (σ=2.5) → ${prUnsure.toFixed(3)} (σ=8)`,
+        prUnsure < prSure - 0.15,   // confidence must drop CLEARLY, not by an arbitrary made-up threshold
         `→ ${prUnsure.toFixed(3)} vs ${prSure.toFixed(3)}`);
-  console.log(`     → σ=2.5: ${(prSure*100).toFixed(0)}%  ·  σ=8.0: ${(prUnsure*100).toFixed(0)}%  ← app tự bớt tự tin`);
+  console.log(`     → σ=2.5: ${(prSure*100).toFixed(0)}%  ·  σ=8.0: ${(prUnsure*100).toFixed(0)}%  ← the app is less confident on its own`);
 
-  // Người sigma lớn thay đổi rating nhiều hơn người sigma nhỏ
+  // Someone with large sigma has their rating move more than someone with small sigma
   const newbie = { ...p(50, 8), id: 'newbie' };
   const vet    = { ...p(50, 2.5), id: 'vet' };
   const opp1   = { ...p(50, 3), id: 'o1' };
@@ -209,32 +209,32 @@ console.log('\n■ RATING — TrueSkill');
   const ups = updateRatings([newbie, vet], [opp1, opp2], 'A');
   const dNew = Math.abs(ups.find(u => u.playerId === 'newbie')!.mu - 50);
   const dVet = Math.abs(ups.find(u => u.playerId === 'vet')!.mu - 50);
-  check(`người mù mờ (σ=8) học nhanh hơn người đã biết rõ (σ=2.5): ${dNew.toFixed(2)} vs ${dVet.toFixed(2)}`,
+  check(`the uncertain player (σ=8) learns faster than the well-known one (σ=2.5): ${dNew.toFixed(2)} vs ${dVet.toFixed(2)}`,
         dNew > dVet * 3, `→ ${dNew.toFixed(2)} vs ${dVet.toFixed(2)}`);
 
-  // KHÁCH VÃNG LAI (sigma khổng lồ) không làm hỏng rating hội viên
+  // A DROP-IN GUEST (huge sigma) doesn't corrupt a member's rating
   const member = { ...p(50, 2.5), id: 'member' };
   const guest  = { ...p(50, 15), id: 'guest' };
   const upsG = updateRatings([member, guest], [opp1, opp2], 'A');
   const dMemberVsGuest = Math.abs(upsG.find(u => u.playerId === 'member')!.mu - 50);
   const upsN = updateRatings([member, { ...p(50, 2.5), id: 'z' }], [opp1, opp2], 'A');
   const dMemberNormal = Math.abs(upsN.find(u => u.playerId === 'member')!.mu - 50);
-  check(`đánh cùng KHÁCH (σ lớn) → rating hội viên đổi ÍT hơn (tự bảo vệ): ${dMemberVsGuest.toFixed(3)} < ${dMemberNormal.toFixed(3)}`,
+  check(`playing with a GUEST (large σ) → member rating changes LESS (self-protecting): ${dMemberVsGuest.toFixed(3)} < ${dMemberNormal.toFixed(3)}`,
         dMemberVsGuest < dMemberNormal, `→ ${dMemberVsGuest.toFixed(3)} vs ${dMemberNormal.toFixed(3)}`);
 }
 
 // =============================================================
-console.log('\n■ SEED — div chồng lấn có chủ đích');
+console.log('\n■ SEED — deliberately overlapping divs');
 {
-  check('D1 mạnh nhất = 72', seedMu(1, 1, 11) === 72);
-  check('D1 yếu nhất = 55', Math.abs(seedMu(1, 11, 11) - 55) < 0.01);
-  check('D2 mạnh nhất = 52 (GẦN với D1 yếu nhất = 55 → ranh giới div vốn mờ)',
+  check('D1 strongest = 72', seedMu(1, 1, 11) === 72);
+  check('D1 weakest = 55', Math.abs(seedMu(1, 11, 11) - 55) < 0.01);
+  check('D2 strongest = 52 (CLOSE to D1 weakest = 55 → the div boundary is inherently fuzzy)',
         Math.abs(seedMu(2, 1, 11) - 52) < 0.01);
-  check('D2 yếu nhất = 32', Math.abs(seedMu(2, 11, 11) - 32) < 0.01);
+  check('D2 weakest = 32', Math.abs(seedMu(2, 11, 11) - 32) < 0.01);
 }
 
 // =============================================================
-console.log('\n■ Hiệu năng (210 phương án)');
+console.log('\n■ Performance (210 options)');
 {
   const players = makePlayers();
   const ids = NAMES.slice(0, 14);
@@ -245,7 +245,7 @@ console.log('\n■ Hiệu năng (210 phương án)');
                    config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random });
   }
   const ms = (Date.now() - t0) / 1000;
-  check(`duyệt hết 210 phương án < 5ms (thực tế ${ms.toFixed(2)}ms)`, ms < 5, `→ ${ms.toFixed(2)}ms`);
+  check(`scanning all 210 options < 5ms (actual ${ms.toFixed(2)}ms)`, ms < 5, `→ ${ms.toFixed(2)}ms`);
 }
 
 console.log(`\n${'─'.repeat(58)}`);

@@ -1,64 +1,65 @@
 // ============================================================
-// rating.ts — TrueSkill rút gọn, tự chứa, không phụ thuộc gì
+// rating.ts — Trimmed-down, self-contained TrueSkill, no dependencies
 //
-// Vì sao không dùng `ts-trueskill`?
-//   - Cloud Run container càng ít dependency càng tốt
-//   - Phiên bản này ~60 dòng, đọc được, và ĐÃ ĐƯỢC KIỂM CHỨNG
-//     bằng mô phỏng: hội tụ từ seed ±7 xuống ±3.2 sau ~6 tháng
-//     chạy 1 tiếng/tuần.
+// Why not use `ts-trueskill`?
+//   - Fewer dependencies in the Cloud Run container is better
+//   - This version is ~60 lines, readable, and has been VALIDATED
+//     by simulation: converges from a ±7 seed down to ±3.2 after
+//     ~6 months of playing 1 hour/week.
 //
-// Vì sao KHÔNG dùng Elo?
-//   - Elo không có sigma. Nó không phân biệt được "1500 vì mới"
-//     với "1500 vì đã đo 50 trận". Với nhóm này (rating hội tụ
-//     rất chậm), đó là lỗi chí mạng.
+// Why NOT Elo?
+//   - Elo has no sigma. It can't tell "1500 because they're new"
+//     apart from "1500 because we've measured 50 games". For this
+//     group (rating converges very slowly), that's a fatal flaw.
 // ============================================================
 
 import type { ClubPlayer } from './types';
 
-/** Thang điểm: 0-100, trung bình 50, độ lệch chuẩn ~15. */
+/** Scale: 0-100, mean 50, standard deviation ~15. */
 export const MU_MIN = 25;
 export const MU_MAX = 75;
 
-/** Độ bất định ban đầu. ĐỪNG hạ thấp hơn — rating sẽ học chậm. */
+/** Initial uncertainty. DO NOT lower it — rating will learn slower. */
 export const SIGMA_INIT = 8.0;
 
-/** Sàn của sigma. Không bao giờ "biết chắc chắn" về ai. */
+/** Floor for sigma. Never "certain" about anyone. */
 export const SIGMA_MIN = 2.5;
 
-/** "Độ rộng một bậc trình độ" — yếu tố may rủi của cầu lông. */
+/** "Width of one skill tier" — badminton's luck factor. */
 export const BETA = 4.17;
 
-/** Sigma nở ra bao nhiêu mỗi tuần vắng mặt. */
+/** How much sigma expands per week of absence. */
 export const TAU_PER_WEEK = 0.6;
 
-/** Ngưỡng để coi rating là ĐÃ HỘI TỤ (mới được hiện cho người chơi). */
+/** Threshold to consider a rating CONVERGED (only then shown to the player). */
 export const SIGMA_CONVERGED = 4.0;
 export const GAMES_CONVERGED = 15;
 
 // ------------------------------------------------------------
-// SEED — ánh xạ thứ hạng do admin xếp thành mu
+// SEED — maps the admin-assigned rank to mu
 // ------------------------------------------------------------
 
 /**
- * Admin xếp hạng TRONG TỪNG DIV (dễ hơn nhiều so với xếp cả 22 người
- * — và mô phỏng cho thấy kết quả TỐT HƠN: 24.7% trận bét ở tháng đầu,
- * so với 31.2% khi xếp hạng toàn nhóm).
+ * The admin ranks WITHIN EACH DIV (much easier than ranking all 22
+ * people at once — and simulation shows it produces BETTER results:
+ * 24.7% blowout games in the first month, vs. 31.2% when ranking the
+ * whole group at once).
  *
- * Hai div được cố ý CHỒNG LẤN: người D2 giỏi nhất (52) gần với người
- * D1 yếu nhất (55). Ranh giới div vốn mờ — đừng khẳng định một khoảng
- * cách không có thật.
+ * The two divs deliberately OVERLAP: the best D2 player (52) sits
+ * close to the weakest D1 player (55). The div boundary is inherently
+ * fuzzy — don't assert a gap that isn't real.
  */
 export function seedMu(div: 1 | 2, rankInDiv: number, divSize: number): number {
-  const t = divSize <= 1 ? 0 : (rankInDiv - 1) / (divSize - 1); // 0 = mạnh nhất
+  const t = divSize <= 1 ? 0 : (rankInDiv - 1) / (divSize - 1); // 0 = strongest
   if (div === 1) return 72 - t * (72 - 55);  // 72 → 55
   return 52 - t * (52 - 32);                  // 52 → 32
 }
 
 // ------------------------------------------------------------
-// DỰ ĐOÁN
+// PREDICTION
 // ------------------------------------------------------------
 
-/** Hàm phân phối chuẩn tích luỹ. Xấp xỉ Abramowitz–Stegun, sai số < 7.5e-8. */
+/** Cumulative normal distribution function. Abramowitz–Stegun approximation, error < 7.5e-8. */
 function normalCdf(x: number): number {
   const t = 1 / (1 + 0.2316419 * Math.abs(x));
   const d = 0.3989422804014327 * Math.exp(-x * x / 2);
@@ -72,20 +73,21 @@ export interface TeamRating { mu: number; sigmaSq: number; }
 export function teamRating(p1: ClubPlayer, p2: ClubPlayer): TeamRating {
   return {
     mu: p1.mu + p2.mu,
-    sigmaSq: p1.sigma ** 2 + p2.sigma ** 2,   // CỘNG PHƯƠNG SAI, không cộng sigma
+    sigmaSq: p1.sigma ** 2 + p2.sigma ** 2,   // SUM THE VARIANCES, not the sigmas
   };
 }
 
 /**
- * P(đội A thắng).
+ * P(team A wins).
  *
- * Mẫu số = tổng độ mù mờ, gồm HAI nguồn:
- *   - sigma²  : "tôi không biết rõ những người này mạnh cỡ nào"
- *   - 2·beta² : "kể cả biết rõ, cầu lông vẫn có may rủi"
+ * The denominator = total uncertainty, from TWO sources:
+ *   - sigma²  : "I don't know exactly how strong these people are"
+ *   - 2·beta² : "even if I did, badminton still has luck"
  *
- * Khi sigma lớn → mẫu số lớn → kết quả về gần 0.5.
- * Nghĩa là: KHI KHÔNG BIẾT GÌ, APP TỰ NÓI "KHÔNG BIẾT".
- * Không cần viết thêm `if` nào.
+ * When sigma is large → denominator is large → the result drifts
+ * toward 0.5.
+ * In other words: WHEN THE APP KNOWS NOTHING, IT SAYS SO ITSELF.
+ * No extra `if` needed.
  */
 export function winProbability(a: TeamRating, b: TeamRating): number {
   const c = Math.sqrt(2 * BETA ** 2 + a.sigmaSq + b.sigmaSq);
@@ -93,20 +95,22 @@ export function winProbability(a: TeamRating, b: TeamRating): number {
 }
 
 // ------------------------------------------------------------
-// CẬP NHẬT SAU TRẬN
+// UPDATE AFTER A GAME
 // ------------------------------------------------------------
 
 export interface RatingUpdate { playerId: string; mu: number; sigma: number; }
 
 /**
- * Cập nhật rating sau một trận.
+ * Updates ratings after a game.
  *
- * Điểm mấu chốt: mức thay đổi tỉ lệ với sigma². Người còn mù mờ
- * (sigma lớn) học nhanh; người đã biết rõ (sigma nhỏ) gần như không đổi.
+ * The key point: the change scales with sigma². Someone still
+ * uncertain (large sigma) learns fast; someone already well-known
+ * (small sigma) barely moves.
  *
- * Hệ quả tự động: khi đánh với KHÁCH VÃNG LAI (sigma khổng lồ), mẫu số
- * phình to → mức cập nhật cho hội viên tự động giảm. Rating của bạn
- * KHÔNG bị hỏng bởi một trận với người lạ. Không cần code gì thêm.
+ * Automatic consequence: when playing with a DROP-IN GUEST (huge
+ * sigma), the denominator balloons → the update applied to the
+ * member automatically shrinks. Your rating is NOT corrupted by one
+ * game against a stranger. No extra code needed.
  */
 export function updateRatings(
   teamA: [ClubPlayer, ClubPlayer],
@@ -140,20 +144,21 @@ export function updateRatings(
 }
 
 // ------------------------------------------------------------
-// VẮNG MẶT
+// ABSENCE
 // ------------------------------------------------------------
 
 /**
- * Nghỉ lâu → sigma NỞ RA. Nhưng mu KHÔNG ĐỔI.
+ * A long break → sigma EXPANDS. But mu DOES NOT CHANGE.
  *
- * Đây là điểm quan trọng nhất trong toàn bộ file này:
+ * This is the single most important point in this entire file:
  *
- *   BẠN KHÔNG YẾU ĐI VÌ NGHỈ HAI TUẦN.
- *   Hệ thống chỉ BỚT CHẮC CHẮN về bạn.
+ *   YOU DON'T GET WEAKER FROM TAKING TWO WEEKS OFF.
+ *   The system just becomes LESS CERTAIN about you.
  *
- * Đừng bao giờ giảm mu vì vắng mặt — đó là NÓI DỐI, và người ta sẽ
- * phát hiện ra. Nếu muốn tạo áp lực đi đều, hãy dùng HẠNG (tier), thứ
- * đòi hỏi hoạt động gần đây để giữ. Rating là sự thật; hạng là chỗ đứng.
+ * Never lower mu for absence — that would be LYING, and people will
+ * notice. If you want to create pressure to attend regularly, use a
+ * TIER, something that requires recent activity to maintain. Rating
+ * is the truth; tier is your standing.
  */
 export function inflateSigmaForAbsence(player: ClubPlayer, weeksAway: number): number {
   if (weeksAway <= 0) return player.sigma;
@@ -164,19 +169,19 @@ export function inflateSigmaForAbsence(player: ClubPlayer, weeksAway: number): n
 }
 
 // ------------------------------------------------------------
-// HIỂN THỊ
+// DISPLAY
 // ------------------------------------------------------------
 
 /**
- * Rating đã đủ tin cậy để HIỆN cho người chơi chưa?
- * Nếu chưa: hiện "Đang xếp hạng (8/15 trận)" — trung thực, và tự nó
- * là động lực để đi đều.
+ * Is the rating reliable enough to SHOW to the player yet?
+ * If not: show "Ranking in progress (8/15 games)" — honest, and it's
+ * its own incentive to keep showing up regularly.
  */
 export function isConverged(p: ClubPlayer): boolean {
   return p.sigma < SIGMA_CONVERGED && p.gamesTotal >= GAMES_CONVERGED;
 }
 
-/** Dự đoán CHỈ được hiện khi cả 4 người đều đã hội tụ. */
+/** A prediction is ONLY shown once all 4 people have converged. */
 export function canShowPrediction(players: ClubPlayer[]): boolean {
   return players.every(p => p.sigma < SIGMA_CONVERGED);
 }
