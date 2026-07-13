@@ -4,10 +4,42 @@ import { useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { usePlayers } from '@/lib/use-players';
 import { writeFetch } from '@/lib/client-code';
+import { startSort, answer, currentPair, isDone, type SortState } from './pairwise-sort';
 import type { PublicPlayerDoc } from '@/lib/firestore';
 
 const DIVS: Array<1 | 2> = [1, 2];
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
+
+function savedKey(div: 1 | 2): string {
+  return `rank-sort-div-${div}`;
+}
+
+/** Only resumes a saved sort if it still matches the CURRENT active
+ * roster for that division exactly — otherwise a player added/removed
+ * mid-sort would silently corrupt the in-progress state. */
+function loadSaved(div: 1 | 2, validIds: Set<string>): SortState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(savedKey(div));
+    if (!raw) return null;
+    const state = JSON.parse(raw) as SortState;
+    const allIds = [...state.sorted, ...state.remaining, ...(state.current ? [state.current.id] : [])];
+    if (allIds.length !== validIds.size || allIds.some(id => !validIds.has(id))) return null;
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function saveProgress(div: 1 | 2, state: SortState): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(savedKey(div), JSON.stringify(state));
+}
+
+function clearProgress(div: 1 | 2): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(savedKey(div));
+}
 
 export default function AdminPlayersPage() {
   const { players, loading } = usePlayers();
@@ -15,9 +47,11 @@ export default function AdminPlayersPage() {
     name: '', gender: 'M', div: 1,
   });
   const [busy, setBusy] = useState(false);
-  const [dragId, setDragId] = useState<string | null>(null);
-  // Drag-and-drop updates the LOCAL list right away (smooth feel), server confirms after.
+  // Optimistic local reorder (arrows or a finished comparison sort) — server confirms after.
   const [localOrder, setLocalOrder] = useState<Record<number, string[]> | null>(null);
+
+  const [rankingDiv, setRankingDiv] = useState<1 | 2 | null>(null);
+  const [sortState, setSortState] = useState<SortState | null>(null);
 
   const byDiv = useMemo(() => {
     const groups: Record<1 | 2, PublicPlayerDoc[]> = { 1: [], 2: [] };
@@ -41,6 +75,14 @@ export default function AdminPlayersPage() {
 
   const inactive = useMemo(() => players.filter(p => !p.active), [players]);
 
+  const savedByDiv = useMemo(
+    () => ({
+      1: loadSaved(1, new Set(byDiv[1].map(p => p.id))),
+      2: loadSaved(2, new Set(byDiv[2].map(p => p.id))),
+    }),
+    [byDiv],
+  );
+
   async function addPlayer(e: FormEvent) {
     e.preventDefault();
     if (!form.name.trim() || busy) return;
@@ -57,22 +99,52 @@ export default function AdminPlayersPage() {
     await writeFetch(`/api/players/${p.id}`, { method: 'PATCH', body: JSON.stringify({ active: !p.active }) });
   }
 
-  function handleDrop(div: 1 | 2, targetId: string) {
-    const from = dragId;
-    setDragId(null);
-    if (!from || from === targetId) return;
-
+  function moveInDiv(div: 1 | 2, index: number, direction: -1 | 1) {
     const list = [...byDiv[div]];
-    const fromIdx = list.findIndex(p => p.id === from);
-    const toIdx = list.findIndex(p => p.id === targetId);
-    if (fromIdx === -1 || toIdx === -1) return;
-
-    const [moved] = list.splice(fromIdx, 1);
-    list.splice(toIdx, 0, moved);
+    const otherIndex = index + direction;
+    if (otherIndex < 0 || otherIndex >= list.length) return;
+    [list[index], list[otherIndex]] = [list[otherIndex], list[index]];
     const orderedIds = list.map(p => p.id);
-
     setLocalOrder(prev => ({ ...(prev ?? {}), [div]: orderedIds }));
     writeFetch('/api/players/reorder', { method: 'POST', body: JSON.stringify({ div, orderedIds }) });
+  }
+
+  function beginRanking(div: 1 | 2) {
+    const ids = byDiv[div].map(p => p.id);
+    const saved = loadSaved(div, new Set(ids));
+    setSortState(saved ?? startSort(ids));
+    setRankingDiv(div);
+  }
+
+  function restartRanking(div: 1 | 2) {
+    clearProgress(div);
+    setSortState(startSort(byDiv[div].map(p => p.id)));
+    setRankingDiv(div);
+  }
+
+  function cancelRanking() {
+    setRankingDiv(null);
+    setSortState(null);
+  }
+
+  async function finishRanking(div: 1 | 2, finalState: SortState) {
+    clearProgress(div);
+    setRankingDiv(null);
+    setSortState(null);
+    const orderedIds = finalState.sorted;
+    setLocalOrder(prev => ({ ...(prev ?? {}), [div]: orderedIds }));
+    await writeFetch('/api/players/reorder', { method: 'POST', body: JSON.stringify({ div, orderedIds }) });
+  }
+
+  function respond(choice: 'a' | 'b' | 'skip') {
+    if (!sortState || rankingDiv === null) return;
+    const next = answer(sortState, choice);
+    if (isDone(next)) {
+      finishRanking(rankingDiv, next);
+    } else {
+      setSortState(next);
+      saveProgress(rankingDiv, next);
+    }
   }
 
   return (
@@ -124,29 +196,97 @@ export default function AdminPlayersPage() {
         <p className="text-line-400">Loading…</p>
       ) : (
         <>
-          {DIVS.map(div => (
-            <section key={div}>
-              <p className="mb-2 text-[11px] font-medium text-line-400">div {div} · drag-and-drop to set seed rank</p>
-              <ul className="space-y-2">
-                {byDiv[div].map(p => (
-                  <li
-                    key={p.id}
-                    draggable
-                    onDragStart={() => setDragId(p.id)}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={() => handleDrop(div, p.id)}
-                    className="flex min-h-[56px] cursor-move items-center justify-between rounded-xl border border-line-700 bg-court-800 px-3 py-2"
-                  >
-                    <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
-                      {p.seedRank}. {p.name} {p.gender === 'F' ? '♀' : ''}
-                    </span>
-                    <button onClick={() => toggleActive(p)} className="text-[13px] text-line-400">Remove</button>
-                  </li>
-                ))}
-                {byDiv[div].length === 0 && <li className="text-[13px] text-line-400">Nobody here yet.</li>}
-              </ul>
-            </section>
-          ))}
+          {DIVS.map(div => {
+            const ranking = rankingDiv === div && sortState;
+            const saved = savedByDiv[div];
+            const namesById = new Map(byDiv[div].map(p => [p.id, p.name]));
+
+            return (
+              <section key={div}>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-medium text-line-400">div {div} · strongest to weakest</p>
+                  {!ranking && (
+                    <button
+                      onClick={() => beginRanking(div)}
+                      className={`text-[13px] text-line-400 underline ${TAP}`}
+                    >
+                      {saved ? `Continue ranking · ${saved.doneComparisons} of ${saved.totalComparisons}` : 'Rank via comparisons'}
+                    </button>
+                  )}
+                </div>
+
+                {ranking && sortState ? (
+                  (() => {
+                    const pair = currentPair(sortState, namesById);
+                    if (!pair) return null;
+                    const shown = Math.min(sortState.doneComparisons + 1, sortState.totalComparisons);
+                    return (
+                      <div className="space-y-3 rounded-xl border border-line-700 bg-court-800 p-4">
+                        <p className="text-center text-[13px] text-line-400">Who is stronger?</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => respond('a')}
+                            className={`min-h-[96px] flex-1 rounded-xl border border-line-700 px-2 font-display text-[20px] text-line-000 ${TAP}`}
+                            style={{ fontStretch: '110%' }}
+                          >
+                            {pair.a}
+                          </button>
+                          <button
+                            onClick={() => respond('b')}
+                            className={`min-h-[96px] flex-1 rounded-xl border border-line-700 px-2 font-display text-[20px] text-line-000 ${TAP}`}
+                            style={{ fontStretch: '110%' }}
+                          >
+                            {pair.b}
+                          </button>
+                        </div>
+                        <p className="text-center text-[13px] text-line-400">
+                          <button onClick={() => respond('skip')} className="underline">skip</button>
+                          {' '}· <span className="tabular">{shown} of {sortState.totalComparisons}</span>
+                        </p>
+                        <div className="flex justify-center gap-4 text-[11px] text-line-700">
+                          <button onClick={() => restartRanking(div)}>Start over</button>
+                          <button onClick={cancelRanking}>Cancel</button>
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <ul className="space-y-2">
+                    {byDiv[div].map((p, i) => (
+                      <li
+                        key={p.id}
+                        className="flex min-h-[56px] items-center justify-between gap-2 rounded-xl border border-line-700 bg-court-800 px-3 py-2"
+                      >
+                        <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
+                          {i + 1}. {p.name} {p.gender === 'F' ? '♀' : ''}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            disabled={i === 0}
+                            onClick={() => moveInDiv(div, i, -1)}
+                            aria-label={`Move ${p.name} up`}
+                            className={`flex h-11 w-11 items-center justify-center rounded-lg border border-line-700 text-line-400 disabled:opacity-30 ${TAP}`}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            disabled={i === byDiv[div].length - 1}
+                            onClick={() => moveInDiv(div, i, 1)}
+                            aria-label={`Move ${p.name} down`}
+                            className={`flex h-11 w-11 items-center justify-center rounded-lg border border-line-700 text-line-400 disabled:opacity-30 ${TAP}`}
+                          >
+                            ▼
+                          </button>
+                          <button onClick={() => toggleActive(p)} className="ml-2 text-[13px] text-line-400">Remove</button>
+                        </div>
+                      </li>
+                    ))}
+                    {byDiv[div].length === 0 && <li className="text-[13px] text-line-400">Nobody here yet.</li>}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
 
           {inactive.length > 0 && (
             <section>
