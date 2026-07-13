@@ -109,28 +109,35 @@ export default function NewSessionPage() {
       }
 
       // Editing, but the date changed — the date IS the document id,
-      // so there's no rename: delete the wrong-date draft, then create
-      // a fresh one at the corrected date with the (possibly further
-      // edited) roster.
-      if (editingId && editingId !== playDate) {
-        const delRes = await writeFetch(`/api/session/${editingId}/draft`, { method: 'DELETE' });
-        if (!delRes.ok) {
-          const body = await delRes.json().catch(() => null);
-          setMessage(`Error deleting the old draft: ${body?.error ?? delRes.status}`);
-          return;
-        }
-      }
-
+      // so there's no rename: create a fresh one at the corrected date
+      // FIRST, and only delete the wrong-date draft once that succeeds.
+      // createSessionRoster() now refuses (409) if the new date already
+      // collides with an existing session — creating first means a
+      // collision leaves the original draft untouched instead of
+      // deleting it and then failing to create the replacement.
       const res = await writeFetch(`/api/session/${playDate}/roster`, {
         method: 'POST',
         body: JSON.stringify({ courtCount: courts, playerIds: [...selected] }),
       });
-      if (res.ok) {
-        router.push('/admin');
-      } else {
+      if (!res.ok) {
         const body = await res.json().catch(() => null);
         setMessage(`Error: ${body?.error ?? res.status}`);
+        return;
       }
+
+      if (editingId && editingId !== playDate) {
+        const delRes = await writeFetch(`/api/session/${editingId}/draft`, { method: 'DELETE' });
+        if (!delRes.ok) {
+          const body = await delRes.json().catch(() => null);
+          setMessage(
+            `Created ${playDate}, but couldn't delete the old ${editingId} draft: ${body?.error ?? delRes.status}. ` +
+            `Both now exist — delete the old one from /admin/session/new.`,
+          );
+          return;
+        }
+      }
+
+      router.push('/admin');
     } finally {
       setBusy(false);
     }

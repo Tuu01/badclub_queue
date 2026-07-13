@@ -837,20 +837,34 @@ export async function reorderDivision(
 // ============================================================
 
 /**
- * Ensures sessions/{sessionId} exists and has copies of
+ * Creates sessions/{sessionId} fresh, with copies of
  * {name,gender,div,mu,sigma} for the selected people (denormalized —
  * see the top of this file).
  *
- * If the session already exists, only ADDS new people to players
- * (doesn't touch existing ones — avoids overwriting mu/sigma already
- * updated by games played this session).
+ * REFUSES if a session already exists at that id, in ANY status.
+ *
+ * Used to merge into an existing doc (any status) — that was wrong:
+ * "create a new session" for a date that happens to collide with an
+ * old DONE/LIVE/legacy session silently wrote into dead data and
+ * never revived its status, so the result was invisible to
+ * getActiveSession() (which only ever looks at LIVE/DRAFT) — a POST
+ * that returns 200 and does something, but nothing anyone can see.
+ * The date IS the document id, so a real collision is exactly the
+ * "wrong date" mistake this should surface, not swallow. Editing an
+ * EXISTING DRAFT on purpose goes through setDraftRoster()/the
+ * /admin/session/new "edit" flow instead — that's the only case where
+ * writing into an existing doc is intended.
  */
+export class SessionExistsError extends Error {
+  constructor(public sessionId: string) { super(`a session already exists for ${sessionId}`); }
+}
+
 export async function ensureSessionAndPlayers(
   db: Firestore,
   clubId: string,
   args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
   now = Date.now(),
-): Promise<{ created: boolean }> {
+): Promise<{ created: true }> {
   const sRef = db.doc(`sessions/${args.sessionId}`);
   const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
   const playersRef = db.collection(`clubs/${clubId}/players`);
@@ -862,20 +876,15 @@ export async function ensureSessionAndPlayers(
       Promise.all(args.playerIds.map(id => tx.get(playersRef.doc(id)))),
     ]);
 
-    const s = sSnap.data() as SessionDoc | undefined;
-    const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
-    const players: Record<PlayerId, SessionPlayer> = { ...(s?.players ?? {}) };
+    if (sSnap.exists) throw new SessionExistsError(args.sessionId);
 
+    const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+    const players: Record<PlayerId, SessionPlayer> = {};
     for (const snap of playerSnaps) {
-      if (!snap.exists || players[snap.id]) continue;
+      if (!snap.exists) continue;
       const p = snap.data() as PublicPlayerDoc;
       const r = ratings[p.id] ?? { mu: 50, sigma: SIGMA_INIT };
       players[p.id] = { id: p.id, name: p.name, gender: p.gender, div: p.div, mu: r.mu, sigma: r.sigma };
-    }
-
-    if (s) {
-      tx.update(sRef, { players });
-      return { created: false };
     }
 
     const doc: SessionDoc = {
@@ -904,9 +913,9 @@ export async function createSessionRoster(
   clubId: string,
   args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
   now = Date.now(),
-): Promise<{ created: boolean }> {
+): Promise<{ created: true }> {
   const result = await ensureSessionAndPlayers(db, clubId, args, now);
-  if (result.created) await bumpCoAttendance(db, clubId, args.playerIds, now);
+  await bumpCoAttendance(db, clubId, args.playerIds, now);
   return result;
 }
 
