@@ -929,6 +929,34 @@ export async function startSession(db: Firestore, sessionId: string): Promise<vo
   await db.doc(`sessions/${sessionId}`).update({ status: 'LIVE' });
 }
 
+export class NotLiveError extends Error {
+  constructor() { super('only a LIVE session can be ended'); }
+}
+
+/**
+ * Admin-initiated end, from /admin/sessions — deliberately separate
+ * from UC-12's automatic staleness check (useActiveSession() already
+ * skips a LIVE session dated before today; that's the thing that
+ * actually protects against "the session never ends," not this
+ * button — see the comment in lib/use-active-session.ts). This is for
+ * an admin who wants to close out TODAY's session early, on purpose.
+ *
+ * Does NOT touch in-progress courts/games — any court still showing a
+ * gameId when this runs stays exactly as it is, inside a session that
+ * / and /admin no longer surface. The caller is expected to check
+ * (and warn) before calling this; see the confirm text in
+ * app/admin/sessions/page.tsx.
+ */
+export async function endSession(db: Firestore, sessionId: string): Promise<void> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  await db.runTransaction(async (tx: Transaction) => {
+    const snap = await tx.get(sRef);
+    const s = snap.data() as SessionDoc | undefined;
+    if (!s || s.status !== 'LIVE') throw new NotLiveError();
+    tx.update(sRef, { status: 'DONE', endedAt: Date.now() });
+  });
+}
+
 // ============================================================
 // EDITING A DRAFT — wrong date, wrong headcount, wrong court count.
 // Cheap to fix ONLY before check-in: a DRAFT has no attendance and no
