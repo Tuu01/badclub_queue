@@ -204,17 +204,33 @@ The **"Swap"** button must be **always visible, never buried in a menu**. The pa
 
 ## API ROUTES (Firebase Admin SDK, server-side)
 
+Last verified against the actual codebase 2026-07-13 — this list was stale
+for a while (only 7 of the 14 routes below were ever documented; the rest
+were built later and never backfilled here).
+
 ```
-POST /api/session/:id/checkin   { playerIds: string[] }        → checkInBatch()
-POST /api/session/:id/result    { gameId, courtIdx, winner, scoreLoser?, actor }
-                                                                → recordResult()
-POST /api/session/:id/assign    { courtIdx, four, teamA, teamB, accepted,
-                                  suggested?, reason?, assignedByApp, actor }
-                                                                → assignCourt()
-GET  /api/session/:id/suggest?court=N                           → getSuggestion()
-POST /api/session/:id/mode      { mode }
-POST /api/session/:id/pause     { playerId, paused }
-POST /api/session/:id/undo      { auditLogId }
+POST   /api/session/:id/checkin  { playerIds: string[] }        → checkInBatch()
+POST   /api/session/:id/result   { gameId, courtIdx, winner: 'A'|'B'|null,
+                                    scoreLoser?, actor }         → recordResult()
+POST   /api/session/:id/assign   { courtIdx, four, teamA, teamB, accepted,
+                                    suggested?, reason?, assignedByApp, actor }
+                                                                 → assignCourt()
+POST   /api/session/:id/swap     { courtIdx, outId, inId, actor } → swapPlayerOnCourt()
+GET    /api/session/:id/suggest?court=N                          → getSuggestion()
+POST   /api/session/:id/mode     { mode }                        → setMode()
+POST   /api/session/:id/pause    { playerId, paused }            → setPaused()
+POST   /api/session/:id/leave    { playerId }                    → setLeft()
+POST   /api/session/:id/undo     { auditLogId }                  → undoResult()
+POST   /api/session/:id/guest    { name, gender }                → addGuest()
+POST   /api/session/:id/roster   { courtCount, playerIds }       → createSessionRoster()
+                                                                    (creates a NEW session; refuses
+                                                                     if one already exists at :id)
+PUT    /api/session/:id/draft    { courtCount, playerIds }       → setDraftRoster()
+                                                                    (edits an existing DRAFT in place)
+DELETE /api/session/:id/draft    (no body)                       → deleteDraftSession()
+POST   /api/session/:id/start    (no body)                       → startSession()
+                                                                    (refuses if another session is LIVE)
+POST   /api/session/:id/end      (no body)                       → endSession()
 ```
 
 Clients **read directly** via `onSnapshot()` — realtime, never through Vercel, zero invocations.
