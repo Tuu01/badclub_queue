@@ -925,8 +925,39 @@ export async function createSessionRoster(
  * lib/use-active-session.ts). Does not touch attendance — checking
  * people in is a separate, later action.
  */
+/**
+ * Refuses if any OTHER session is already LIVE. Hit this for real
+ * three times in one afternoon of testing — Firestore's LIVE query
+ * has no ordering, so with two LIVE sessions, whichever phone loads
+ * `/` first gets an arbitrary one, silently. Better to block the
+ * SECOND "Start session" outright than let that happen to a real
+ * 22-person session. See AlreadyLiveError and
+ * lib/use-active-session.ts (which additionally refuses to silently
+ * pick one if this check is ever bypassed, e.g. by two admins tapping
+ * "Start session" on two different DRAFTs in the same instant).
+ */
+export class AlreadyLiveError extends Error {
+  constructor(public liveSessionId: string, public liveDate: string) {
+    super(`a session is already live (${liveDate})`);
+  }
+}
+
 export async function startSession(db: Firestore, sessionId: string): Promise<void> {
-  await db.doc(`sessions/${sessionId}`).update({ status: 'LIVE' });
+  const sRef = db.doc(`sessions/${sessionId}`);
+  const liveQuery = db.collection('sessions').where('status', '==', 'LIVE');
+
+  await db.runTransaction(async (tx: Transaction) => {
+    const [sSnap, liveSnap] = await Promise.all([tx.get(sRef), tx.get(liveQuery)]);
+    if (!sSnap.exists) throw new Error('session not found');
+
+    const other = liveSnap.docs.find(d => d.id !== sessionId);
+    if (other) {
+      const otherData = other.data() as SessionDoc;
+      throw new AlreadyLiveError(other.id, otherData.date);
+    }
+
+    tx.update(sRef, { status: 'LIVE' });
+  });
 }
 
 export class NotLiveError extends Error {

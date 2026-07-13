@@ -90,7 +90,7 @@ function PlayerActionRow({
 }
 
 export default function Home() {
-  const { session, loading, online } = useActiveSession();
+  const { session, loading, online, liveConflict } = useActiveSession();
   const sessionId = session?.id ?? '';
 
   const actor = useActor();
@@ -110,6 +110,7 @@ export default function Home() {
   const [pausedConfirmId, setPausedConfirmId] = useState<PlayerId | null>(null);
   const [playerActionId, setPlayerActionId] = useState<PlayerId | null>(null);
   const [lastAction, setLastAction] = useState<{ auditLogId: string; at: number } | null>(null);
+  const [startError, setStartError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // ASSIGN-mode suggestions, keyed by court. undefined = still loading;
@@ -369,8 +370,13 @@ export default function Home() {
   async function startSession() {
     if (!session || busy) return;
     setBusy(true);
+    setStartError(null);
     try {
-      await writeFetch(`/api/session/${sessionId}/start`, { method: 'POST' });
+      const res = await writeFetch(`/api/session/${sessionId}/start`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setStartError(body?.error ?? `Could not start session (${res.status})`);
+      }
     } finally {
       setBusy(false);
     }
@@ -378,6 +384,25 @@ export default function Home() {
 
   if (loading) {
     return <main className="flex min-h-dvh items-center justify-center bg-court-900 text-line-400">Loading…</main>;
+  }
+
+  // Never silently pick one — see lib/use-active-session.ts. This
+  // takes priority over every other screen below.
+  if (liveConflict) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-court-900 px-4 text-center">
+        <p className="font-display text-2xl text-signal" style={{ fontStretch: '115%' }}>
+          ⚠ Two sessions are live.
+        </p>
+        <p className="text-line-400">This is a bug. Tell the admin.</p>
+        <ul className="text-[13px] text-line-400">
+          {liveConflict.map(s => <li key={s.id}>{s.date}</li>)}
+        </ul>
+        <Link href="/admin/sessions" className="text-[13px] text-line-000 underline">
+          Go to /admin/sessions to end one
+        </Link>
+      </main>
+    );
   }
 
   if (!session) {
@@ -407,6 +432,7 @@ export default function Home() {
           >
             Start session
           </button>
+          {startError && <p className="mt-3 max-w-xs text-[13px] text-signal">{startError}</p>}
         </div>
         <AdminLink />
       </main>

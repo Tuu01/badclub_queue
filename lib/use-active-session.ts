@@ -42,11 +42,24 @@ export function useActiveSession(): {
    * nothing happens to change.
    */
   online: boolean;
+  /**
+   * Set when the LIVE query returns more than one session (dated
+   * today or later). startSession() now refuses to create a second
+   * LIVE session in the first place — but this is the backstop for
+   * every OTHER way it could still happen (a direct Firestore edit, a
+   * bug, two admins racing before that check existed). Hit this for
+   * real three times in one afternoon; the failure mode is silent and
+   * arbitrary — whichever phone's listener resolves first shows a
+   * DIFFERENT session, with no indication anything is wrong. So:
+   * `session` becomes null while this is set, rather than picking one.
+   */
+  liveConflict: SessionDoc[] | null;
 } {
   const [live, setLive] = useState<SessionDoc | null | undefined>(undefined);
   const [nearestDraft, setNearestDraft] = useState<SessionDoc | null | undefined>(undefined);
   const [liveFromCache, setLiveFromCache] = useState(false);
   const [draftFromCache, setDraftFromCache] = useState(false);
+  const [liveConflict, setLiveConflict] = useState<SessionDoc[] | null>(null);
 
   useEffect(() => {
     const liveQuery = query(collection(db, 'sessions'), where('status', '==', 'LIVE'));
@@ -55,7 +68,13 @@ export function useActiveSession(): {
       const current = snap.docs
         .map(d => d.data() as SessionDoc)
         .filter(s => s.date >= today);   // stale LIVE (date < today) → never resurrects
-      setLive(current.length > 0 ? current[0] : null);
+      if (current.length > 1) {
+        setLiveConflict(current);
+        setLive(null);                  // never silently pick one
+      } else {
+        setLiveConflict(null);
+        setLive(current.length > 0 ? current[0] : null);
+      }
       setLiveFromCache(snap.metadata.fromCache);
     });
 
@@ -80,5 +99,5 @@ export function useActiveSession(): {
   const session = live ?? nearestDraft ?? null;
   const online = !liveFromCache && !draftFromCache;
 
-  return { session, loading, online };
+  return { session, loading, online, liveConflict };
 }
