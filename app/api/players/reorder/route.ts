@@ -6,13 +6,13 @@ import { CLUB_ID } from '@/lib/constants';
 
 export async function POST(req: NextRequest) {
   if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'sai mã' }, { status: 401 });
+    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
   }
 
   const body = await req.json().catch(() => null);
   const { div, orderedIds } = body ?? {};
   if ((div !== 1 && div !== 2) || !Array.isArray(orderedIds) || orderedIds.length === 0) {
-    return NextResponse.json({ error: 'thiếu div/orderedIds hợp lệ' }, { status: 400 });
+    return NextResponse.json({ error: 'missing valid div/orderedIds' }, { status: 400 });
   }
 
   await reorderDivision(adminDb, CLUB_ID, div, orderedIds);

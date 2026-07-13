@@ -1,11 +1,13 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { usePlayers } from '@/lib/use-players';
 import { writeFetch } from '@/lib/client-code';
 import type { PublicPlayerDoc } from '@/lib/firestore';
 
 const DIVS: Array<1 | 2> = [1, 2];
+const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
 export default function AdminPlayersPage() {
   const { players, loading } = usePlayers();
@@ -14,7 +16,7 @@ export default function AdminPlayersPage() {
   });
   const [busy, setBusy] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
-  // Kéo-thả cập nhật danh sách LOCAL ngay (mượt tay), server xác nhận sau.
+  // Drag-and-drop updates the LOCAL list right away (smooth feel), server confirms after.
   const [localOrder, setLocalOrder] = useState<Record<number, string[]> | null>(null);
 
   const byDiv = useMemo(() => {
@@ -74,52 +76,57 @@ export default function AdminPlayersPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl p-4 space-y-8">
-      <h1 className="text-2xl font-bold">Người chơi</h1>
+    <main className="mx-auto min-h-dvh max-w-2xl space-y-8 bg-court-900 p-4 text-line-000">
+      <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
+      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Players</p>
 
       <form onSubmit={addPlayer} className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="block text-sm mb-1">Tên</label>
+          <label className="mb-1 block text-[13px] text-line-400">Name</label>
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-            className="h-14 min-w-[10rem] rounded border border-gray-300 px-3"
+            className="h-14 min-w-[10rem] rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000"
           />
         </div>
         <div>
-          <label className="block text-sm mb-1">Giới tính</label>
+          <label className="mb-1 block text-[13px] text-line-400">Gender</label>
           <select
             value={form.gender}
             onChange={e => setForm(f => ({ ...f, gender: e.target.value as 'M' | 'F' }))}
-            className="h-14 rounded border border-gray-300 px-3"
+            className="h-14 rounded-xl border border-line-700 bg-court-900 px-3 text-[16px] text-line-000"
           >
-            <option value="M">Nam</option>
-            <option value="F">Nữ</option>
+            <option value="M">Male</option>
+            <option value="F">Female</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm mb-1">Div</label>
+          <label className="mb-1 block text-[13px] text-line-400">Div</label>
           <select
             value={form.div}
             onChange={e => setForm(f => ({ ...f, div: Number(e.target.value) as 1 | 2 }))}
-            className="h-14 rounded border border-gray-300 px-3"
+            className="h-14 rounded-xl border border-line-700 bg-court-900 px-3 text-[16px] text-line-000"
           >
             <option value={1}>1</option>
             <option value={2}>2</option>
           </select>
         </div>
-        <button disabled={busy} type="submit" className="h-14 rounded bg-black px-6 text-white disabled:opacity-50">
-          Thêm
+        <button
+          disabled={busy}
+          type="submit"
+          className={`h-14 rounded-xl border border-line-000 bg-line-000 px-6 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
+        >
+          Add
         </button>
       </form>
 
       {loading ? (
-        <p>Đang tải…</p>
+        <p className="text-line-400">Loading…</p>
       ) : (
         <>
           {DIVS.map(div => (
             <section key={div}>
-              <h2 className="mb-2 text-lg font-semibold">Div {div} · kéo-thả để xếp hạng seed</h2>
+              <p className="mb-2 text-[11px] font-medium text-line-400">div {div} · drag-and-drop to set seed rank</p>
               <ul className="space-y-2">
                 {byDiv[div].map(p => (
                   <li
@@ -128,28 +135,30 @@ export default function AdminPlayersPage() {
                     onDragStart={() => setDragId(p.id)}
                     onDragOver={e => e.preventDefault()}
                     onDrop={() => handleDrop(div, p.id)}
-                    className="flex min-h-[56px] cursor-move items-center justify-between rounded border border-gray-300 bg-white px-3 py-2"
+                    className="flex min-h-[56px] cursor-move items-center justify-between rounded-xl border border-line-700 bg-court-800 px-3 py-2"
                   >
-                    <span>{p.seedRank}. {p.name} {p.gender === 'F' ? '♀' : ''}</span>
-                    <button onClick={() => toggleActive(p)} className="text-sm text-red-600">Gỡ</button>
+                    <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
+                      {p.seedRank}. {p.name} {p.gender === 'F' ? '♀' : ''}
+                    </span>
+                    <button onClick={() => toggleActive(p)} className="text-[13px] text-line-400">Remove</button>
                   </li>
                 ))}
-                {byDiv[div].length === 0 && <li className="text-sm text-gray-500">Chưa có ai.</li>}
+                {byDiv[div].length === 0 && <li className="text-[13px] text-line-400">Nobody here yet.</li>}
               </ul>
             </section>
           ))}
 
           {inactive.length > 0 && (
             <section>
-              <h2 className="mb-2 text-lg font-semibold text-gray-500">Đã gỡ ({inactive.length})</h2>
+              <p className="mb-2 text-[11px] font-medium text-line-400">removed ({inactive.length})</p>
               <ul className="space-y-2">
                 {inactive.map(p => (
                   <li
                     key={p.id}
-                    className="flex min-h-[56px] items-center justify-between rounded border border-gray-200 px-3 py-2 text-gray-500"
+                    className="flex min-h-[56px] items-center justify-between rounded-xl border border-line-800 px-3 py-2 text-line-400"
                   >
-                    <span>{p.name}</span>
-                    <button onClick={() => toggleActive(p)} className="text-sm text-blue-600">Khôi phục</button>
+                    <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>{p.name}</span>
+                    <button onClick={() => toggleActive(p)} className="text-[13px] text-line-000">Restore</button>
                   </li>
                 ))}
               </ul>

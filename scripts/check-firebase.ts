@@ -1,14 +1,16 @@
 // ============================================================
-// check-firebase.ts — kiểm tra kết nối: ghi một doc test, đọc lại, xoá.
-// Chạy: npm run check:firebase
+// check-firebase.ts — connectivity check: write a test doc, read it
+// back, delete it.
+// Run: npm run check:firebase
 // ============================================================
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-// tsx không tự nạp .env.local như Next.js — nạp thủ công ở đây,
-// TRƯỚC khi import lib/firebase-admin (import tĩnh bị hoist lên đầu
-// module, nên phải dùng import động sau khi env đã có).
+// tsx doesn't auto-load .env.local like Next.js does — load it
+// manually here, BEFORE importing lib/firebase-admin (static imports
+// get hoisted to the top of the module, so a dynamic import has to be
+// used after the env is available).
 function loadEnvLocal() {
   const envPath = path.resolve(process.cwd(), '.env.local');
   if (!existsSync(envPath)) return;

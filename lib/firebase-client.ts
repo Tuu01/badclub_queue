@@ -1,6 +1,6 @@
 // ============================================================
-// firebase-client.ts — Client SDK, chạy trên trình duyệt.
-// Chỉ đọc (onSnapshot). Ghi luôn đi qua Route Handler + Admin SDK.
+// firebase-client.ts — Client SDK, runs in the browser.
+// Read-only (onSnapshot). Writes always go through a Route Handler + Admin SDK.
 // ============================================================
 
 import { initializeApp, getApps, getApp } from 'firebase/app';

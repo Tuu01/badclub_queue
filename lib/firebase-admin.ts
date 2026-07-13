@@ -1,13 +1,13 @@
 // ============================================================
-// firebase-admin.ts — Admin SDK, chỉ chạy server-side (Route Handlers).
-// Bỏ qua firestore.rules — đây là nơi DUY NHẤT được phép ghi.
+// firebase-admin.ts — Admin SDK, server-side only (Route Handlers).
+// Bypasses firestore.rules — this is the ONLY place allowed to write.
 // ============================================================
 
 import { cert, getApps, getApp, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// Private key được lưu trong .env với \n đã escape thành literal "\n" —
-// service account JSON gốc có xuống dòng thật, .env thì không cho phép.
+// The private key is stored in .env with \n escaped as the literal "\n" —
+// the original service account JSON has real newlines, which .env doesn't allow.
 const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
 const app = getApps().length

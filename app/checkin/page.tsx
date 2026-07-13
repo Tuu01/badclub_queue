@@ -1,43 +1,42 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { usePlayers } from '@/lib/use-players';
-import { useSession } from '@/lib/use-session';
+import { useActiveSession } from '@/lib/use-active-session';
 import { writeFetch } from '@/lib/client-code';
-import { todaySessionId } from '@/lib/session-id';
+
+const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
 export default function CheckinPage() {
+  const router = useRouter();
   const { players, loading } = usePlayers();
-  const sessionId = todaySessionId();
-  const { session, loading: sessionLoading } = useSession(sessionId);
+  const { session, loading: sessionLoading } = useActiveSession();
+  const sessionId = session?.id ?? '';
 
-  const [courtCount, setCourtCount] = useState(3);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showMore, setShowMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const [guestOpen, setGuestOpen] = useState(false);
+  const [guestForm, setGuestForm] = useState<{ name: string; gender: 'M' | 'F' }>({ name: '', gender: 'M' });
 
   const active = useMemo(
     () => [...players].filter(p => p.active).sort((a, b) => a.name.localeCompare(b.name)),
     [players],
   );
 
-  // Nếu /admin/session/new đã chốt danh sách buổi, chỉ hiện ĐÚNG những
-  // người đó ("Shows only the ~22 people on the roster" — PROMPT.md).
-  // Chưa có buổi (hoặc chưa ai chốt danh sách) → hiện toàn bộ 55 người,
-  // giống hành vi tối giản của Step 1.
-  const hasPresetRoster = !!session && Object.keys(session.players).length > 0;
+  // The session (created by /admin/session/new) already has its roster
+  // set — /checkin only shows those ~22 people (PROMPT.md).
   const roster = useMemo(
-    () => (hasPresetRoster ? active.filter(p => session!.players[p.id]) : active),
-    [active, hasPresetRoster, session],
+    () => (session ? active.filter(p => session.players[p.id]) : []),
+    [active, session],
   );
   const extra = useMemo(
-    () => (hasPresetRoster ? active.filter(p => !session!.players[p.id]) : []),
-    [active, hasPresetRoster, session],
+    () => (session ? active.filter(p => !session.players[p.id]) : []),
+    [active, session],
   );
-
-  const effectiveCourtCount = hasPresetRoster ? session!.courtCount : courtCount;
 
   function toggle(id: string) {
     setSelected(prev => {
@@ -47,20 +46,41 @@ export default function CheckinPage() {
     });
   }
 
-  async function submit() {
-    if (selected.size === 0 || busy) return;
+  async function done() {
+    if (busy) return;
+    if (selected.size === 0) {
+      router.push('/');
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
       const res = await writeFetch(`/api/session/${sessionId}/checkin`, {
         method: 'POST',
-        body: JSON.stringify({ courtCount: effectiveCourtCount, playerIds: [...selected] }),
+        body: JSON.stringify({ playerIds: [...selected] }),
       });
       if (res.ok) {
-        setMessage(`Đã check-in ${selected.size} người — buổi ${sessionId}.`);
+        router.push('/');
       } else {
         const body = await res.json().catch(() => null);
-        setMessage(`Lỗi: ${body?.error ?? res.status}`);
+        setMessage(`Error: ${body?.error ?? res.status}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addGuest() {
+    if (!guestForm.name.trim() || busy) return;
+    setBusy(true);
+    try {
+      const res = await writeFetch(`/api/session/${sessionId}/guest`, {
+        method: 'POST',
+        body: JSON.stringify(guestForm),
+      });
+      if (res.ok) {
+        setGuestOpen(false);
+        setGuestForm({ name: '', gender: 'M' });
       }
     } finally {
       setBusy(false);
@@ -79,9 +99,10 @@ export default function CheckinPage() {
                 type="button"
                 onClick={() => toggle(p.id)}
                 disabled={!!already}
-                className={`min-h-[56px] w-full rounded border px-3 py-2 text-left disabled:opacity-40 ${
-                  on ? 'border-black bg-black text-white' : 'border-gray-300 bg-white'
+                className={`min-h-[56px] w-full rounded-xl border px-3 py-2 text-left font-display text-[17px] disabled:opacity-40 ${TAP} ${
+                  on ? 'border-line-000 bg-line-000 text-court-900' : 'border-line-700 text-line-000'
                 }`}
+                style={{ fontStretch: '105%' }}
               >
                 {p.name}{already ? ' ✓' : ''}
               </button>
@@ -93,68 +114,79 @@ export default function CheckinPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-4">
-      <h1 className="text-2xl font-bold">Check-in</h1>
-
-      {hasPresetRoster ? (
-        <p className="text-sm text-gray-500">
-          {session!.courtCount} sân · danh sách đã chốt ở /admin/session/new ({roster.length} người)
-        </p>
-      ) : (
-        <div className="flex items-center gap-3">
-          <label className="text-sm">Số sân</label>
-          <input
-            type="number"
-            min={1}
-            max={8}
-            value={courtCount}
-            onChange={e => setCourtCount(Math.max(1, Number(e.target.value) || 1))}
-            className="h-14 w-20 rounded border border-gray-300 px-3 text-lg"
-          />
-        </div>
-      )}
+    <main className="min-h-dvh bg-court-900 px-4 py-6 text-line-000">
+      <p className="mb-4 font-display text-xl" style={{ fontStretch: '115%' }}>Check-in</p>
 
       {loading || sessionLoading ? (
-        <p>Đang tải…</p>
+        <p className="text-line-400">Loading…</p>
+      ) : !session ? (
+        <p className="text-line-400">No session yet. Create one at /admin/session/new.</p>
       ) : (
         <>
+          <p className="mb-4 text-[13px] text-line-400">
+            {session.courtCount} courts · roster ({roster.length} people)
+          </p>
+
           {renderGrid(roster)}
           {roster.length === 0 && (
-            <p className="text-sm text-gray-500">
-              Chưa có ai trong danh sách. Thêm người ở /admin/players trước.
+            <p className="text-[13px] text-line-400">
+              Nobody in the roster yet. Add people at /admin/players first.
             </p>
           )}
 
-          {hasPresetRoster && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowMore(s => !s)}
-                className="min-h-[44px] text-sm text-gray-500 underline"
-              >
-                {showMore ? 'Ẩn' : '+ Thêm người không có trong danh sách'}
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowMore(s => !s)}
+              className="min-h-[44px] text-[13px] text-line-400 underline"
+            >
+              {showMore ? 'Hide' : '+ Add someone not on the list'}
+            </button>
+            {showMore && <div className="mt-2">{renderGrid(extra)}</div>}
+          </div>
+
+          <button
+            type="button"
+            onClick={done}
+            disabled={busy}
+            className={`mt-4 min-h-[56px] w-full rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
+          >
+            {busy ? 'Saving…' : 'Done'}
+          </button>
+
+          {message && <p className="mt-3 text-center text-[13px] text-line-400">{message}</p>}
+
+          <div className="mt-6 border-t border-line-700 pt-4">
+            {guestOpen ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <input
+                  value={guestForm.name}
+                  onChange={e => setGuestForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Guest name"
+                  className="h-14 min-w-[10rem] flex-1 rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000 placeholder:text-line-400"
+                />
+                <select
+                  value={guestForm.gender}
+                  onChange={e => setGuestForm(f => ({ ...f, gender: e.target.value as 'M' | 'F' }))}
+                  className="h-14 rounded-xl border border-line-700 bg-court-900 px-3 text-[16px] text-line-000"
+                >
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                </select>
+                <button onClick={addGuest} disabled={busy} className={`h-14 rounded-xl border border-line-000 bg-line-000 px-4 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}>
+                  Add
+                </button>
+                <button onClick={() => setGuestOpen(false)} className={`h-14 rounded-xl border border-line-700 px-4 text-[16px] font-medium text-line-400 ${TAP}`}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setGuestOpen(true)} className={`min-h-[56px] w-full rounded-xl border border-line-700 text-[16px] text-line-400 ${TAP}`}>
+                + Add guest
               </button>
-              {showMore && <div className="mt-2">{renderGrid(extra)}</div>}
-            </div>
-          )}
+            )}
+          </div>
         </>
-      )}
-
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy || selected.size === 0}
-        className="min-h-[56px] w-full rounded bg-green-600 text-lg font-semibold text-white disabled:opacity-50"
-      >
-        {busy ? 'Đang lưu…' : `Check-in ${selected.size} người`}
-      </button>
-
-      {message && <p className="text-center">{message}</p>}
-
-      {!hasPresetRoster && (
-        <Link href="/admin/session/new" className="block text-center text-sm text-gray-500">
-          Muốn dán danh sách từ nhóm chat? → /admin/session/new
-        </Link>
       )}
     </main>
   );

@@ -3,53 +3,54 @@ rules_version = '2';
 // ============================================================
 // firestore.rules
 //
-// NGUYÊN TẮC:
-//   ĐỌC — mở toang. Dán link vào Zalo, ai mở cũng xem được.
-//         Đây là cách app LAN RA trong nhóm mà không cần thuyết phục ai.
-//         Một app phải xin mã mới xem được thì không ai xem, và không ai
-//         xem thì không ai dùng.
+// PRINCIPLE:
+//   READ — wide open. Paste the link into Zalo, anyone who opens it
+//          can see it. This is how the app SPREADS through the group
+//          without having to convince anyone.
+//          An app that requires a code just to view it → nobody
+//          views it, and if nobody views it, nobody uses it.
 //
-//   GHI — KHÔNG BAO GIỜ từ client. Chỉ qua Admin SDK (server-side),
-//         thứ bỏ qua toàn bộ rules này.
+//   WRITE — NEVER from the client. Only via the Admin SDK
+//           (server-side), which bypasses these rules entirely.
 //
-//   Vì sao? Nếu client ghi trực tiếp: hai điện thoại cùng lấy An và Bình
-//   cho hai sân khác nhau. Server phải là trọng tài.
+//   Why? If the client wrote directly: two phones could both grab An
+//   and Binh for two different courts. The server has to be the referee.
 // ============================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---------- TRẠNG THÁI BUỔI CHƠI: ai cũng đọc được ----------
+    // ---------- SESSION STATE: anyone can read ----------
     match /sessions/{sessionId} {
       allow read: if true;
-      allow write: if false;          // ← chỉ Admin SDK
+      allow write: if false;          // ← Admin SDK only
 
       match /games/{gameId} {
         allow read: if true;
         allow write: if false;
       }
 
-      // Nhật ký: KHÔNG cho client đọc. Không cần, và nó chứa snapshot rating.
+      // Audit log: client CANNOT read it. Not needed, and it contains rating snapshots.
       match /audit/{logId} {
         allow read, write: if false;
       }
     }
 
-    // ---------- CÂU LẠC BỘ ----------
+    // ---------- CLUB ----------
     match /clubs/{clubId} {
       allow read: if true;
       allow write: if false;
 
-      // Danh sách người chơi: đọc được (để hiện tên).
-      // NHƯNG mu/sigma là dữ liệu nhạy cảm — rating ẩn ít nhất 3 tháng.
-      // Giải pháp: KHÔNG lưu mu/sigma trong doc mà client đọc.
-      // Chúng nằm trong clubs/{cid}/private/ratings — client không thấy.
+      // Player list: readable (to show names).
+      // BUT mu/sigma is sensitive data — rating is hidden for at least 3 months.
+      // Solution: do NOT store mu/sigma in the doc the client reads.
+      // They live in clubs/{cid}/private/ratings — the client never sees them.
       match /players/{playerId} {
         allow read: if true;
         allow write: if false;
       }
 
-      // pairStats + ratings: chỉ server. Client KHÔNG cần, và không nên thấy.
+      // pairStats + ratings: server only. The client doesn't need them, and shouldn't see them.
       match /meta/{docId} {
         allow read, write: if false;
       }
@@ -61,21 +62,24 @@ service cloud.firestore {
 }
 
 // ============================================================
-// LƯU Ý VỀ RATING
+// NOTE ON RATING
 //
-// SessionDoc.players[] có chứa mu/sigma (để suggestMatch chạy được
-// server-side mà chỉ đọc 1 doc). Client ĐỌC ĐƯỢC doc đó.
+// SessionDoc.players[] contains mu/sigma (so suggestMatch can run
+// server-side by reading just 1 doc). The client CAN READ that doc.
 //
-// → Nếu bạn muốn ẩn rating hoàn toàn trong 3 tháng đầu, có 2 cách:
+// → If you want to fully hide rating for the first 3 months, there
+//   are 2 options:
 //
-//   A. Chấp nhận. Rating nằm trong payload nhưng UI không hiện.
-//      Chỉ người mở DevTools mới thấy. Với nhóm bạn bè, đủ.
+//   A. Accept it. The rating is in the payload but the UI doesn't
+//      show it. Only someone who opens DevTools would see it. Good
+//      enough for a group of friends.
 //
-//   B. Tách SessionDoc làm hai:
-//        sessions/{sid}          ← client đọc (không có mu/sigma)
-//        sessions/{sid}/private/state  ← chỉ server (có mu/sigma)
-//      Đúng hơn, nhưng transaction phải đụng 2 doc thay vì 1.
+//   B. Split SessionDoc in two:
+//        sessions/{sid}                 ← client reads (no mu/sigma)
+//        sessions/{sid}/private/state   ← server only (has mu/sigma)
+//      More correct, but the transaction has to touch 2 docs instead of 1.
 //
-// Khuyến nghị: (A) cho v1. Chuyển sang (B) nếu có người soi DevTools
-// và làm ầm lên — điều gần như chắc chắn KHÔNG xảy ra.
+// Recommendation: (A) for v1. Switch to (B) if someone pokes around in
+// DevTools and makes noise about it — which is almost certainly NOT
+// going to happen.
 // ============================================================

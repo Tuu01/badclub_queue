@@ -1,2 +1,2 @@
-// Một câu lạc bộ duy nhất — không cần multi-tenant.
+// A single club — no need for multi-tenancy.
 export const CLUB_ID = 'default';

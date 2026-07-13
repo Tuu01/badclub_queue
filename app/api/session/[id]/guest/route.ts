@@ -5,14 +5,14 @@ import { hasValidCode } from '@/lib/auth';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'sai mã' }, { status: 401 });
+    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
   }
 
   const { id } = await params;
   const body = await req.json().catch(() => null);
   const { name, gender } = body ?? {};
   if (typeof name !== 'string' || !name.trim() || (gender !== 'M' && gender !== 'F')) {
-    return NextResponse.json({ error: 'thiếu name/gender hợp lệ' }, { status: 400 });
+    return NextResponse.json({ error: 'missing valid name/gender' }, { status: 400 });
   }
 
   const result = await addGuest(adminDb, id, { name: name.trim(), gender });

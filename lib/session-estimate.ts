@@ -1,15 +1,16 @@
 // ============================================================
-// session-estimate.ts — ước lượng cho /admin/session/new bước 1.
+// session-estimate.ts — estimate shown in /admin/session/new step 1.
 //
-// Giả định: buổi 120 phút, mỗi trận ~20 phút (PROMPT.md) → 6 trận/sân.
+// Assumption: a 120-minute session, ~20 minutes per game (PROMPT.md)
+// → 6 games/court.
 //
-//   games/người  = (6 trận/sân × sân × 4 người/trận) / tổng người
-//                = 24 × sân / người
-//   % ngồi ngoài = 1 − (giờ chơi thật / giờ có mặt)
-//                = 1 − 4 × sân / người
+//   games/person   = (6 games/court × courts × 4 people/game) / total people
+//                   = 24 × courts / people
+//   % sitting out  = 1 − (actual playing time / time present)
+//                   = 1 − 4 × courts / people
 //
-// Khớp đúng ví dụ trong PROMPT.md: 3 sân, 22 người → 3.3 trận/người,
-// ngồi ngoài 45%.
+// Matches the example in PROMPT.md exactly: 3 courts, 22 people →
+// 3.3 games/person, 45% sitting out.
 // ============================================================
 
 const SESSION_MINUTES = 120;
@@ -19,7 +20,7 @@ const GAMES_PER_COURT = SESSION_MINUTES / GAME_MINUTES; // 6
 export interface SessionEstimate {
   gamesPerPerson: number;
   sittingOutFraction: number;
-  /** người present − sân×4. Xem CẢNH BÁO NGƯỠNG SÀN trong PROMPT.md. */
+  /** people present − courts×4. See FLOOR THRESHOLD warning in PROMPT.md. */
   pool: number;
   poolTooSmall: boolean;
 }
@@ -32,7 +33,7 @@ export function estimateSession(courts: number, headcount: number): SessionEstim
   return { gamesPerPerson, sittingOutFraction, pool, poolTooSmall: pool < 8 };
 }
 
-/** Người present tối thiểu để tránh ngưỡng sàn (courts×4 + 8). */
+/** Minimum people present to stay above the floor threshold (courts×4 + 8). */
 export function safeHeadcount(courts: number): number {
   return courts * 4 + 8;
 }

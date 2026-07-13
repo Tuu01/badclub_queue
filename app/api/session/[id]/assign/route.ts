@@ -4,12 +4,13 @@ import { assignCourt, ConflictError } from '@/lib/firestore';
 import { hasValidCode } from '@/lib/auth';
 import type { PlayerId } from '@/lib/types';
 
-// Dùng cho cả xếp trận thủ công (RECORD mode, "Bắt đầu sân") lẫn xếp trận
-// theo gợi ý (ASSIGN mode, Step 5) — client luôn gửi four/teamA/teamB,
-// server luôn kiểm tra lại trong transaction. Xem ARCHITECTURE.md §3.
+// Used for both manual court assignment (RECORD mode, "Start court")
+// and suggestion-based assignment (ASSIGN mode, Step 5) — the client
+// always sends four/teamA/teamB, and the server always re-validates
+// inside the transaction. See ARCHITECTURE.md §3.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'sai mã' }, { status: 401 });
+    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     !Array.isArray(teamB) || teamB.length !== 2 ||
     typeof actor !== 'string'
   ) {
-    return NextResponse.json({ error: 'thiếu courtIdx/four/teamA/teamB/actor hợp lệ' }, { status: 400 });
+    return NextResponse.json({ error: 'missing valid courtIdx/four/teamA/teamB/actor' }, { status: 400 });
   }
 
   try {
@@ -42,8 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof ConflictError) {
-      // Bình thường — hai sân cùng lấy trùng người. Không phải lỗi.
-      return NextResponse.json({ error: 'đã bị lấy', taken: err.taken }, { status: 409 });
+      // Normal — two courts grabbed the same person at once. Not an error.
+      return NextResponse.json({ error: 'already taken', taken: err.taken }, { status: 409 });
     }
     throw err;
   }

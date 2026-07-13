@@ -1,7 +1,7 @@
 'use client';
 
-// Đọc trực tiếp qua client SDK (onSnapshot) — không qua Vercel.
-// clubs/{cid}/players cho phép đọc mở (firestore.rules).
+// Reads directly via the client SDK (onSnapshot) — never through Vercel.
+// clubs/{cid}/players allows open reads (firestore.rules).
 
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';

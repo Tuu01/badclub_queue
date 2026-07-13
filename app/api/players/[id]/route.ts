@@ -6,7 +6,7 @@ import { CLUB_ID } from '@/lib/constants';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'sai mã' }, { status: 401 });
+    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (typeof active === 'boolean') patch.active = active;
 
   if (Object.keys(patch).length === 0) {
-    return NextResponse.json({ error: 'không có gì để sửa' }, { status: 400 });
+    return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
   }
 
   await updatePlayer(adminDb, CLUB_ID, id, patch);

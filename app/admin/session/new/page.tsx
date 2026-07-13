@@ -2,17 +2,22 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { usePlayers } from '@/lib/use-players';
 import { writeFetch } from '@/lib/client-code';
-import { todaySessionId } from '@/lib/session-id';
+import { nextSaturday } from '@/lib/session-id';
 import { estimateSession, safeHeadcount } from '@/lib/session-estimate';
 import { matchPastedNames, type MatchedLine } from '@/lib/fuzzy-match';
 
+const TAP = 'transition-transform duration-75 active:scale-[0.98]';
+
 export default function NewSessionPage() {
+  const router = useRouter();
   const { players, loading } = usePlayers();
   const active = useMemo(() => players.filter(p => p.active), [players]);
 
   const [step, setStep] = useState<1 | 2>(1);
+  const [playDate, setPlayDate] = useState(() => nextSaturday());
   const [courts, setCourts] = useState(3);
   const [headcount, setHeadcount] = useState(22);
   const estimate = estimateSession(courts, headcount);
@@ -41,9 +46,9 @@ export default function NewSessionPage() {
     });
   }
 
-  // Sắp theo LÂU CHƯA ĐẾN — không phải xếp hạng, không phán xét lý do
-  // (xem PROMPT.md: "NO ⚠️, no red"). Chưa từng chơi (lastPlayedAt=null)
-  // đứng đầu — lâu nhất có thể tưởng tượng được.
+  // Sorted by LONGEST ABSENT — not a ranking, no judgment about why
+  // (see PROMPT.md: "NO ⚠️, no red"). Never played (lastPlayedAt=null)
+  // sorts first — the longest absence imaginable.
   const notSelected = useMemo(
     () =>
       active
@@ -62,103 +67,115 @@ export default function NewSessionPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const sessionId = todaySessionId();
-      const res = await writeFetch(`/api/session/${sessionId}/roster`, {
+      const res = await writeFetch(`/api/session/${playDate}/roster`, {
         method: 'POST',
         body: JSON.stringify({ courtCount: courts, playerIds: [...selected] }),
       });
       if (res.ok) {
-        setMessage(`Đã chốt ${selected.size} người cho buổi ${sessionId}. Sang /checkin để điểm danh ai có mặt.`);
+        router.push('/admin');
       } else {
         const body = await res.json().catch(() => null);
-        setMessage(`Lỗi: ${body?.error ?? res.status}`);
+        setMessage(`Error: ${body?.error ?? res.status}`);
       }
     } finally {
       setBusy(false);
     }
   }
 
-  if (loading) return <main className="p-4">Đang tải…</main>;
+  if (loading) return <main className="min-h-dvh bg-court-900 p-4 text-line-400">Loading…</main>;
 
   if (step === 1) {
     return (
-      <main className="mx-auto max-w-2xl space-y-6 p-4">
-        <h1 className="text-2xl font-bold">Buổi mới — Bước 1</h1>
+      <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
+        <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
+        <p className="font-display text-xl" style={{ fontStretch: '115%' }}>New session — Step 1</p>
 
         <div className="flex items-center gap-3">
-          <label className="w-28 text-sm">Số sân</label>
+          <label className="w-32 text-[13px] text-line-400">Play date</label>
           <input
-            type="number" min={1} max={8} value={courts}
-            onChange={e => setCourts(Math.max(1, Number(e.target.value) || 1))}
-            className="h-14 w-24 rounded border border-gray-300 px-3 text-lg"
+            type="date" value={playDate}
+            onChange={e => setPlayDate(e.target.value)}
+            className="tabular h-14 rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000"
           />
         </div>
         <div className="flex items-center gap-3">
-          <label className="w-28 text-sm">Số người dự kiến</label>
+          <label className="w-32 text-[13px] text-line-400">Courts</label>
+          <input
+            type="number" min={1} max={8} value={courts}
+            onChange={e => setCourts(Math.max(1, Number(e.target.value) || 1))}
+            className="tabular h-14 w-24 rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="w-32 text-[13px] text-line-400">Expected headcount</label>
           <input
             type="number" min={1} value={headcount}
             onChange={e => setHeadcount(Math.max(1, Number(e.target.value) || 1))}
-            className="h-14 w-24 rounded border border-gray-300 px-3 text-lg"
+            className="tabular h-14 w-24 rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000"
           />
         </div>
 
         {estimate && (
-          <div className="rounded border border-gray-300 p-3 text-sm">
+          <div className="rounded-xl border border-line-700 p-3 text-[13px] text-line-400">
             <p>
-              ~{estimate.gamesPerPerson.toFixed(1)} trận/người · ngồi ngoài{' '}
-              {Math.round(estimate.sittingOutFraction * 100)}% thời gian
+              ~{estimate.gamesPerPerson.toFixed(1)} games/person · sitting out{' '}
+              {Math.round(estimate.sittingOutFraction * 100)}% of the time
             </p>
             {estimate.poolTooSmall && (
-              <p className="mt-2 text-amber-700">
-                Chỉ {estimate.pool} người ngồi ngoài cùng lúc — thuật toán mất khả năng trộn người,
-                gần như xếp thuần theo thứ tự chờ. An toàn: từ {safeHeadcount(courts)} người trở lên
-                với {courts} sân.
+              <p className="mt-2 text-line-000">
+                Only {estimate.pool} people sitting out at once — the algorithm loses its freedom
+                to mix people and falls back to almost pure FIFO. Safe: {safeHeadcount(courts)}+
+                people with {courts} courts.
               </p>
             )}
           </div>
         )}
 
-        <button onClick={() => setStep(2)} className="min-h-[56px] w-full rounded bg-black text-white">
-          Tiếp tục
+        <button
+          onClick={() => setStep(2)}
+          className={`min-h-[56px] w-full rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
+        >
+          Continue
         </button>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl space-y-6 p-4">
-      <h1 className="text-2xl font-bold">Buổi mới — Bước 2</h1>
-      <p className="text-sm text-gray-500">{courts} sân · mục tiêu {headcount} người</p>
+    <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
+      <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
+      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>New session — Step 2</p>
+      <p className="text-[13px] text-line-400">{playDate} · {courts} courts · target {headcount} people</p>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium">Dán danh sách từ nhóm chat</label>
+        <label className="text-[13px] font-medium text-line-400">Paste the list from the group chat</label>
         <textarea
           value={pasteText}
           onChange={e => setPasteText(e.target.value)}
           rows={6}
-          placeholder={'Cường\nHà\nLan\n...'}
-          className="w-full rounded border border-gray-300 p-3"
+          placeholder={'Cuong\nHa\nLan\n...'}
+          className="w-full rounded-xl border border-line-700 bg-transparent p-3 text-[16px] text-line-000 placeholder:text-line-400"
         />
-        <button onClick={runMatch} className="min-h-[48px] rounded bg-black px-4 text-white">
-          Ghép tên
+        <button onClick={runMatch} className={`min-h-[48px] rounded-xl border border-line-000 bg-line-000 px-4 text-[16px] font-medium text-court-900 ${TAP}`}>
+          Match names
         </button>
       </div>
 
       {matches && (
-        <div className="space-y-2 rounded border border-gray-300 p-3">
-          <p className="text-sm font-medium">
-            Kết quả ghép ({matches.filter(m => m.best).length}/{matches.length} khớp)
+        <div className="space-y-2 rounded-xl border border-line-700 p-3">
+          <p className="text-[13px] font-medium text-line-400">
+            Match results ({matches.filter(m => m.best).length}/{matches.length} matched)
           </p>
-          <ul className="space-y-1 text-sm">
+          <ul className="space-y-1 text-[13px]">
             {matches.map((m, i) => (
               <li key={i} className="flex items-center justify-between gap-2">
-                <span>{m.raw}</span>
+                <span className="text-line-000">{m.raw}</span>
                 {m.best ? (
-                  <span className={selected.has(m.best.id) ? 'text-green-700' : 'text-gray-400'}>
+                  <span className={selected.has(m.best.id) ? 'text-line-000' : 'text-line-400'}>
                     → {m.best.name}
                   </span>
                 ) : (
-                  <span className="text-gray-400">không khớp</span>
+                  <span className="text-line-400">no match</span>
                 )}
               </li>
             ))}
@@ -167,29 +184,31 @@ export default function NewSessionPage() {
       )}
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold">Đã chọn · {selectedList.length} người</h2>
+        <p className="mb-2 text-[11px] font-medium text-line-400">selected · {selectedList.length} people</p>
         <div className="grid grid-cols-2 gap-2">
           {selectedList.map(p => (
             <button
               key={p.id}
               onClick={() => toggle(p.id)}
-              className="min-h-[48px] rounded border border-black bg-black px-2 text-left text-sm text-white"
+              className={`min-h-[48px] rounded-lg border border-line-000 bg-line-000 px-2 text-left font-display text-[17px] text-court-900 ${TAP}`}
+              style={{ fontStretch: '105%' }}
             >
               {p.name}
             </button>
           ))}
-          {selectedList.length === 0 && <p className="col-span-2 text-sm text-gray-500">Chưa chọn ai.</p>}
+          {selectedList.length === 0 && <p className="col-span-2 text-[13px] text-line-400">Nobody selected yet.</p>}
         </div>
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold text-gray-500">Chưa chọn · sắp theo lâu chưa đến</h2>
+        <p className="mb-2 text-[11px] font-medium text-line-400">not selected · sorted by longest absent</p>
         <div className="grid grid-cols-2 gap-2">
           {notSelected.map(p => (
             <button
               key={p.id}
               onClick={() => toggle(p.id)}
-              className="min-h-[48px] rounded border border-gray-300 px-2 text-left text-sm"
+              className={`min-h-[48px] rounded-lg border border-line-700 px-2 text-left font-display text-[17px] text-line-000 ${TAP}`}
+              style={{ fontStretch: '105%' }}
             >
               {p.name}
             </button>
@@ -198,20 +217,19 @@ export default function NewSessionPage() {
       </div>
 
       <div className="flex gap-2">
-        <button onClick={() => setStep(1)} className="min-h-[56px] rounded border border-gray-300 px-4">
-          Quay lại
+        <button onClick={() => setStep(1)} className={`min-h-[56px] rounded-xl border border-line-700 px-4 text-[16px] font-medium text-line-400 ${TAP}`}>
+          Back
         </button>
         <button
           disabled={selected.size === 0 || busy}
           onClick={confirm}
-          className="min-h-[56px] flex-1 rounded bg-green-600 text-white disabled:opacity-50"
+          className={`min-h-[56px] flex-1 rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
         >
-          Chốt {selected.size} người
+          Create session
         </button>
       </div>
 
-      {message && <p className="text-center text-sm">{message}</p>}
-      <Link href="/checkin" className="block text-center text-sm text-gray-500">Sang /checkin để điểm danh</Link>
+      {message && <p className="text-center text-[13px] text-line-400">{message}</p>}
     </main>
   );
 }

@@ -1,19 +1,22 @@
-// Dựng input cho buildQueue() (lõi thuần, lib/matchmaking.ts) TRỰC TIẾP
-// TRÊN CLIENT, từ session doc đã có sẵn qua onSnapshot. Không gọi API
-// riêng — và thứ tự hiển thị LUÔN khớp với tầng 1 (cổng) thật của server.
+// Builds the input for buildQueue() (the pure core, lib/matchmaking.ts)
+// DIRECTLY ON THE CLIENT, from the session doc already available via
+// onSnapshot. No separate API call — and the displayed order ALWAYS
+// matches the server's real tier-1 gate.
 //
-// `SessionDoc` chỉ import KIỂU (import type) — bị xoá lúc build, nên
-// firebase-admin (chỉ dùng ở server) không lọt vào bundle client.
+// `SessionDoc` is imported as a TYPE ONLY (import type) — erased at
+// build time, so firebase-admin (server-only) never lands in the
+// client bundle.
 
 import { buildQueue } from './matchmaking';
 import { DEFAULT_CONFIG, type ClubPlayer, type Attendance, type PlayerId } from './types';
 import type { SessionDoc } from './firestore';
 
 export function computeQueue(session: SessionDoc, now: number) {
-  // Firestore KHÔNG giữ nguyên thứ tự field qua các lần update dot-path
-  // (vd. setPaused) — sắp theo id trước khi đưa vào Map để tầng 3 (bốc
-  // thăm cố định rng=0) cho thứ tự ỔN ĐỊNH giữa các lần render, thay vì
-  // nhảy lung tung theo thứ tự field ngẫu nhiên Firestore trả về.
+  // Firestore does NOT preserve field order across dot-path updates
+  // (e.g. setPaused) — sort by id before building the Map so tier 3
+  // (fixed-seed draw, rng=0) produces a STABLE order across renders,
+  // instead of jumping around with whatever field order Firestore
+  // happens to return.
   const ids = Object.keys(session.players).sort();
 
   const players = new Map<PlayerId, ClubPlayer>();
@@ -33,7 +36,7 @@ export function computeQueue(session: SessionDoc, now: number) {
     if (c.players) for (const id of c.players) busy.add(id);
   }
 
-  // rng cố định — đây chỉ là hàng chờ HIỂN THỊ, cố định để không nhấp
-  // nháy thứ tự giữa các lần render khi hoà tuyệt đối (đầu buổi).
+  // Fixed rng — this is only the DISPLAY queue, kept fixed so the order
+  // doesn't flicker between renders on exact ties (start of session).
   return buildQueue({ now, players, attendance, pairStats: {}, config: DEFAULT_CONFIG, busy, rng: () => 0 });
 }
