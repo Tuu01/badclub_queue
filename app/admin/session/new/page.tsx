@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usePlayers } from '@/lib/use-players';
+import { useActiveSession } from '@/lib/use-active-session';
 import { writeFetch } from '@/lib/client-code';
 import { nextSaturday } from '@/lib/session-id';
 import { estimateSession, safeHeadcount } from '@/lib/session-estimate';
@@ -27,6 +28,34 @@ export default function NewSessionPage() {
   const [matches, setMatches] = useState<MatchedLine[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Editing the existing next-up DRAFT (wrong date/headcount/courts) is
+  // cheap because nothing's checked in yet — see lib/firestore.ts
+  // #setDraftRoster. Only ever edits the ONE nearest DRAFT
+  // useActiveSession() resolves; if a LIVE session is happening right
+  // now, this always behaves as "create a new one" instead (editing a
+  // later-scheduled DRAFT while another session is live isn't handled
+  // this pass — rare enough to accept).
+  //
+  // Pre-filling from the resolved DRAFT is done by adjusting state
+  // DURING RENDER (React's documented pattern for "sync from an
+  // external value once, then let the user edit locally") rather than
+  // in a useEffect — calling setState directly in an effect body
+  // triggers an extra cascading render and is exactly what
+  // react-hooks/set-state-in-effect flags.
+  const { session: activeSession } = useActiveSession();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [syncedDraftId, setSyncedDraftId] = useState<string | null>(null);
+
+  if (activeSession && activeSession.status === 'DRAFT' && syncedDraftId === null) {
+    setSyncedDraftId(activeSession.id);
+    setEditingId(activeSession.id);
+    setPlayDate(activeSession.date);
+    setCourts(activeSession.courtCount);
+    setHeadcount(activeSession.targetHeadcount);
+    setSelected(new Set(Object.keys(activeSession.players)));
+  }
 
   function runMatch() {
     const results = matchPastedNames(pasteText, active.map(p => ({ id: p.id, name: p.name })));
@@ -67,10 +96,52 @@ export default function NewSessionPage() {
     setBusy(true);
     setMessage(null);
     try {
+      // Editing the same draft, date unchanged → edit in place.
+      if (editingId && editingId === playDate) {
+        const res = await writeFetch(`/api/session/${editingId}/draft`, {
+          method: 'PUT',
+          body: JSON.stringify({ courtCount: courts, playerIds: [...selected] }),
+        });
+        if (res.ok) { router.push('/admin'); return; }
+        const body = await res.json().catch(() => null);
+        setMessage(`Error: ${body?.error ?? res.status}`);
+        return;
+      }
+
+      // Editing, but the date changed — the date IS the document id,
+      // so there's no rename: delete the wrong-date draft, then create
+      // a fresh one at the corrected date with the (possibly further
+      // edited) roster.
+      if (editingId && editingId !== playDate) {
+        const delRes = await writeFetch(`/api/session/${editingId}/draft`, { method: 'DELETE' });
+        if (!delRes.ok) {
+          const body = await delRes.json().catch(() => null);
+          setMessage(`Error deleting the old draft: ${body?.error ?? delRes.status}`);
+          return;
+        }
+      }
+
       const res = await writeFetch(`/api/session/${playDate}/roster`, {
         method: 'POST',
         body: JSON.stringify({ courtCount: courts, playerIds: [...selected] }),
       });
+      if (res.ok) {
+        router.push('/admin');
+      } else {
+        const body = await res.json().catch(() => null);
+        setMessage(`Error: ${body?.error ?? res.status}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteDraft() {
+    if (!editingId || busy) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await writeFetch(`/api/session/${editingId}/draft`, { method: 'DELETE' });
       if (res.ok) {
         router.push('/admin');
       } else {
@@ -88,7 +159,9 @@ export default function NewSessionPage() {
     return (
       <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
         <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
-        <p className="font-display text-xl" style={{ fontStretch: '115%' }}>New session — Step 1</p>
+        <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
+          {editingId ? 'Edit next session — Step 1' : 'New session — Step 1'}
+        </p>
 
         <div className="flex items-center gap-3">
           <label className="w-32 text-[13px] text-line-400">Play date</label>
@@ -137,6 +210,40 @@ export default function NewSessionPage() {
         >
           Continue
         </button>
+
+        {editingId && (
+          confirmDelete ? (
+            <div className="space-y-2 rounded-xl border border-line-700 p-3">
+              <p className="text-[13px] text-line-400">
+                Delete this draft ({playDate})? Nobody has checked in, so nothing is lost — but it can&apos;t be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  disabled={busy}
+                  onClick={deleteDraft}
+                  className={`min-h-[48px] flex-1 rounded-lg border border-signal bg-signal text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className={`min-h-[48px] rounded-lg border border-line-700 px-4 text-[16px] font-medium text-line-400 ${TAP}`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className={`min-h-[44px] w-full text-[13px] text-line-700 ${TAP}`}
+            >
+              Delete this draft
+            </button>
+          )
+        )}
+
+        {message && <p className="text-center text-[13px] text-line-400">{message}</p>}
       </main>
     );
   }
@@ -144,7 +251,9 @@ export default function NewSessionPage() {
   return (
     <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
       <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
-      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>New session — Step 2</p>
+      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
+        {editingId ? 'Edit next session — Step 2' : 'New session — Step 2'}
+      </p>
       <p className="text-[13px] text-line-400">{playDate} · {courts} courts · target {headcount} people</p>
 
       <div className="space-y-2">
@@ -225,7 +334,7 @@ export default function NewSessionPage() {
           onClick={confirm}
           className={`min-h-[56px] flex-1 rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
         >
-          Create session
+          {editingId ? 'Save changes' : 'Create session'}
         </button>
       </div>
 

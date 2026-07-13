@@ -921,6 +921,85 @@ export async function startSession(db: Firestore, sessionId: string): Promise<vo
 }
 
 // ============================================================
+// EDITING A DRAFT — wrong date, wrong headcount, wrong court count.
+// Cheap to fix ONLY before check-in: a DRAFT has no attendance and no
+// games, so there is nothing derived to protect (contrast with UC-2 in
+// USECASES.md — LIVE-with-games is a different, harder problem with
+// no rebuildClubState() yet. This does NOT touch that case at all.)
+// ============================================================
+
+export class NotDraftError extends Error {
+  constructor() { super('only a DRAFT session (no check-in yet) can be edited or deleted'); }
+}
+
+/**
+ * Replaces the roster and court count of a DRAFT in place — REPLACE,
+ * not merge (unlike ensureSessionAndPlayers, which is add-only because
+ * it also has to be safe to call on a LIVE session mid-game). Safe
+ * here specifically because a DRAFT has no attendance/mu-sigma-in-
+ * progress to lose.
+ *
+ * Does NOT re-run bumpCoAttendance — that's tied to the roster being
+ * finalized for the first time (see createSessionRoster). Editing a
+ * DRAFT before it's ever gone LIVE isn't a second real session.
+ */
+export async function setDraftRoster(
+  db: Firestore,
+  clubId: string,
+  sessionId: string,
+  args: { courtCount: number; playerIds: PlayerId[] },
+): Promise<void> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
+  const playersRef = db.collection(`clubs/${clubId}/players`);
+
+  await db.runTransaction(async (tx: Transaction) => {
+    const [sSnap, ratingsSnap, playerSnaps] = await Promise.all([
+      tx.get(sRef),
+      tx.get(ratingsRef),
+      Promise.all(args.playerIds.map(id => tx.get(playersRef.doc(id)))),
+    ]);
+    const s = sSnap.data() as SessionDoc | undefined;
+    if (!s || s.status !== 'DRAFT') throw new NotDraftError();
+
+    const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+    const players: Record<PlayerId, SessionPlayer> = {};
+    for (const snap of playerSnaps) {
+      if (!snap.exists) continue;
+      const p = snap.data() as PublicPlayerDoc;
+      const r = ratings[p.id] ?? { mu: 50, sigma: SIGMA_INIT };
+      players[p.id] = { id: p.id, name: p.name, gender: p.gender, div: p.div, mu: r.mu, sigma: r.sigma };
+    }
+
+    const courts = Array.from({ length: args.courtCount }, (_, i) => ({
+      idx: i, gameId: null, players: null, teamA: null, teamB: null, startedAt: null,
+    }));
+
+    tx.update(sRef, {
+      players, courts,
+      courtCount: args.courtCount,
+      targetHeadcount: args.playerIds.length,
+    });
+  });
+}
+
+/**
+ * Hard delete — ONLY for a DRAFT. Refuses on LIVE/DONE, same
+ * reasoning as setDraftRoster. This is how a wrong PLAY DATE gets
+ * fixed: the date is the document id, so there's no "rename" — delete
+ * the wrong one, create a fresh one at the correct date.
+ */
+export async function deleteDraftSession(db: Firestore, sessionId: string): Promise<void> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  await db.runTransaction(async (tx: Transaction) => {
+    const snap = await tx.get(sRef);
+    const s = snap.data() as SessionDoc | undefined;
+    if (!s || s.status !== 'DRAFT') throw new NotDraftError();
+    tx.delete(sRef);
+  });
+}
+
+// ============================================================
 // MODE — OFF / RECORD / ASSIGN, changeable any time mid-session
 // ============================================================
 
