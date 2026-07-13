@@ -70,36 +70,6 @@ export interface Attendance {
   freeAt: number;
 }
 
-export interface Court {
-  index: number;                    // 0, 1, 2...
-  players: [PlayerId, PlayerId, PlayerId, PlayerId] | null;  // null = empty
-  teamA: [PlayerId, PlayerId] | null;
-  teamB: [PlayerId, PlayerId] | null;
-  startedAt: number | null;
-  gameId: string | null;
-}
-
-export type SessionMode = 'OFF' | 'RECORD' | 'ASSIGN';
-
-export interface Session {
-  id: string;
-  date: string;                     // YYYY-MM-DD
-  courtCount: number;
-  targetHeadcount: number;
-  mode: SessionMode;
-
-  /** Who the admin selected for this session (~22 people). */
-  roster: PlayerId[];
-
-  /** Who's where. Key = playerId. */
-  attendance: Record<PlayerId, Attendance>;
-
-  courts: Court[];
-
-  startedAt: number;
-  endedAt: number | null;
-}
-
 // ---------- GAME ----------
 
 export interface Game {
@@ -125,25 +95,6 @@ export interface Game {
   startedAt: number;
   endedAt: number | null;
   status: 'OK' | 'VOID';
-}
-
-// ---------- SUGGESTION LOG (the most important metric) ----------
-
-export interface SuggestionLog {
-  id: string;
-  sessionId: string;
-  at: number;
-  courtIndex: number;
-
-  suggested: [PlayerId, PlayerId, PlayerId, PlayerId];
-  suggestedTeams: { a: [PlayerId, PlayerId]; b: [PlayerId, PlayerId] };
-  reason: string;
-
-  /** false = the user tapped "Swap". THIS IS THE ALGORITHM'S REAL SCORE. */
-  accepted: boolean;
-
-  /** If swapped, who the user picked instead. */
-  actual: [PlayerId, PlayerId, PlayerId, PlayerId] | null;
 }
 
 // ---------- ALGORITHM CONFIG ----------

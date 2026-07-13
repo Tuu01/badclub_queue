@@ -26,7 +26,7 @@
 
 import type {
   ClubPlayer, PlayerId, Attendance, PairStats, Game,
-  Session, MatchmakingConfig, Suggestion,
+  MatchmakingConfig, Suggestion,
 } from './types';
 import { pairKey, DEFAULT_CONFIG } from './types';
 import { suggestMatch } from './matchmaking';
