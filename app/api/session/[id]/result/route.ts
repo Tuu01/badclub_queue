@@ -4,11 +4,14 @@ import { recordResult } from '@/lib/firestore';
 import { hasValidCode } from '@/lib/auth';
 import { CLUB_ID } from '@/lib/constants';
 
-// Idempotent theo gameId — ba người cùng bấm "Đội A thắng" đều 200 OK.
-// Xem lib/firestore.ts#recordResult.
+// Idempotent by gameId — three people all tapping "Team A won" all
+// get 200 OK. See lib/firestore.ts#recordResult.
+//
+// winner may be null — UC-7 (USECASES.md): frees the court without
+// knowing who won, so a forgotten result never freezes a court.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'sai mã' }, { status: 401 });
+    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -16,9 +19,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { gameId, courtIdx, winner, scoreLoser, actor } = body ?? {};
   if (
     typeof gameId !== 'string' || !Number.isInteger(courtIdx) ||
-    (winner !== 'A' && winner !== 'B') || typeof actor !== 'string'
+    (winner !== 'A' && winner !== 'B' && winner !== null) || typeof actor !== 'string'
   ) {
-    return NextResponse.json({ error: 'thiếu gameId/courtIdx/winner/actor hợp lệ' }, { status: 400 });
+    return NextResponse.json({ error: 'missing valid gameId/courtIdx/winner/actor' }, { status: 400 });
   }
 
   const result = await recordResult(adminDb, id, CLUB_ID, {

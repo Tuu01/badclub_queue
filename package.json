@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx tests/engine.test.ts",
+    "test:integration": "tsx tests/firestore-uc5.test.ts",
     "check:firebase": "tsx scripts/check-firebase.ts"
   },
   "dependencies": {
