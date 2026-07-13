@@ -90,7 +90,7 @@ function PlayerActionRow({
 }
 
 export default function Home() {
-  const { session, loading, lastUpdateAt } = useActiveSession();
+  const { session, loading, online } = useActiveSession();
   const sessionId = session?.id ?? '';
 
   const actor = useActor();
@@ -100,6 +100,7 @@ export default function Home() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+  const [offlineSince, setOfflineSince] = useState<number | null>(null);
 
   const [pickerCtx, setPickerCtx] = useState<PickerCtx | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
@@ -145,9 +146,21 @@ export default function Home() {
     }
   }, [session, sessionId]);
 
-  const sinceUpdate = lastUpdateAt !== null ? now - lastUpdateAt : 0;
+  // Latches the moment `online` first flips false, so a real outage
+  // gets the "reconnecting" then "offline" grace period UC-10 wants —
+  // but recovers to 'live' the instant online flips back true, no
+  // lingering delay. Adjusted DURING RENDER (React's documented
+  // pattern for "sync from an external value," same as the DRAFT
+  // pre-fill in /admin/session/new) rather than in a useEffect or a
+  // ref read, both of which react-hooks/* now flags directly.
+  if (online && offlineSince !== null) {
+    setOfflineSince(null);
+  } else if (!online && offlineSince === null) {
+    setOfflineSince(now);
+  }
+  const sinceOffline = offlineSince !== null ? now - offlineSince : 0;
   const connection: 'live' | 'reconnecting' | 'offline' =
-    lastUpdateAt === null ? 'live' : sinceUpdate > OFFLINE_MS ? 'offline' : sinceUpdate > RECONNECT_MS ? 'reconnecting' : 'live';
+    offlineSince === null ? 'live' : sinceOffline > OFFLINE_MS ? 'offline' : sinceOffline > RECONNECT_MS ? 'reconnecting' : 'live';
   const stale = connection === 'offline';
 
   const availablePlayers = useMemo(() => {

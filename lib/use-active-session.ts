@@ -28,32 +28,46 @@ import type { SessionDoc } from './firestore';
 export function useActiveSession(): {
   session: SessionDoc | null;
   loading: boolean;
-  lastUpdateAt: number | null;
+  /**
+   * True once BOTH listeners are confirmed synced with the server
+   * (Firestore's own metadata.fromCache === false) — NOT "changed
+   * recently." A plain onSnapshot() only fires when the query RESULTS
+   * change, so on a perfectly healthy but idle connection (nobody's
+   * written anything in a while — e.g. reading a suggestion before
+   * tapping "Take court") it never fires again, and "time since last
+   * update" falsely looks identical to "connection died." Passing
+   * { includeMetadataChanges: true } makes the listener also fire
+   * when the SDK's own view of connectivity changes, giving a real
+   * online/offline signal instead of a proxy that's wrong the instant
+   * nothing happens to change.
+   */
+  online: boolean;
 } {
   const [live, setLive] = useState<SessionDoc | null | undefined>(undefined);
   const [nearestDraft, setNearestDraft] = useState<SessionDoc | null | undefined>(undefined);
-  const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
+  const [liveFromCache, setLiveFromCache] = useState(false);
+  const [draftFromCache, setDraftFromCache] = useState(false);
 
   useEffect(() => {
     const liveQuery = query(collection(db, 'sessions'), where('status', '==', 'LIVE'));
-    const unsubLive = onSnapshot(liveQuery, snap => {
+    const unsubLive = onSnapshot(liveQuery, { includeMetadataChanges: true }, snap => {
       const today = todayDateString();
       const current = snap.docs
         .map(d => d.data() as SessionDoc)
         .filter(s => s.date >= today);   // stale LIVE (date < today) → never resurrects
       setLive(current.length > 0 ? current[0] : null);
-      setLastUpdateAt(Date.now());
+      setLiveFromCache(snap.metadata.fromCache);
     });
 
     const today = todayDateString();
     const draftQuery = query(collection(db, 'sessions'), where('status', '==', 'DRAFT'));
-    const unsubDraft = onSnapshot(draftQuery, snap => {
+    const unsubDraft = onSnapshot(draftQuery, { includeMetadataChanges: true }, snap => {
       const upcoming = snap.docs
         .map(d => d.data() as SessionDoc)
         .filter(s => s.date >= today)
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       setNearestDraft(upcoming.length > 0 ? upcoming[0] : null);
-      setLastUpdateAt(Date.now());
+      setDraftFromCache(snap.metadata.fromCache);
     });
 
     return () => {
@@ -64,6 +78,7 @@ export function useActiveSession(): {
 
   const loading = live === undefined || nearestDraft === undefined;
   const session = live ?? nearestDraft ?? null;
+  const online = !liveFromCache && !draftFromCache;
 
-  return { session, loading, lastUpdateAt };
+  return { session, loading, online };
 }
