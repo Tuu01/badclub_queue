@@ -462,7 +462,14 @@ Next Saturday, the session is still `LIVE`. `getActiveSession()` returns last we
 1. **[End session]** button in the footer (recessed — nobody will remember to press it).
 2. **Automatic:** any `LIVE` session dated before today is treated as `DONE`. **Check on read.** No cron job, no scheduled function.
 
-**In-progress matches at cutoff** → `status: VOID`. No rating update, no `pairStats` update. They were never finished; they're evidence of nothing.
+**DEFERRED, not built:** in-progress matches at cutoff → `status: VOID`, no
+rating update, no `pairStats` update. What's actually shipped: `endSession()`
+leaves in-progress courts/games exactly as they are, inside a session neither
+`/` nor `/admin` surface afterward — the admin sees how many courts are still
+mid-match before confirming (`app/admin/sessions/page.tsx`) and makes an
+informed call. No auto-void, no rating cleanup. Build the VOID path if this
+ever actually bites someone; until then, the honest, smaller version is what
+exists.
 
 ### Test
 A `LIVE` session dated yesterday. Open the app today. It must not resurrect.
