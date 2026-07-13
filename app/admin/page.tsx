@@ -26,6 +26,7 @@ export default function AdminHubPage() {
 
       <Card href="/admin/session/new" title="New session" subtitle="Set the play date and roster." />
       <Card href="/admin/players" title="Players" subtitle="Manage the club roster and seed ranking." />
+      <Card href="/admin/sessions" title="All sessions" subtitle="Every session ever created, by date." />
       {!loading && session && (
         <Card
           href="/"
