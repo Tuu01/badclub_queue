@@ -121,7 +121,7 @@ function AttendanceTab({ members, myId }: { members: BoardMember[]; myId: string
 // within a band are alphabetical so there's no implied sub-ranking.
 // See LEADERBOARD.md §5's provisional-band decision note.
 const BAND_ORDER: SkillBand[] = ['ADVANCED', 'INTERMEDIATE', 'BEGINNER'];
-const BAND_EMOJI: Record<SkillBand, string> = { ADVANCED: '🏆', INTERMEDIATE: '🎯', BEGINNER: '🌱' };
+const BAND_EMOJI: Record<SkillBand, string> = { ADVANCED: '🥇', INTERMEDIATE: '🥈', BEGINNER: '🥉' };
 
 function SkillTab({ data, myId }: { data: BoardData; myId: string | undefined }) {
   const banded = data.members.filter(m => m.skill.band !== null);
@@ -146,7 +146,7 @@ function SkillTab({ data, myId }: { data: BoardData; myId: string | undefined })
         return (
           <div key={band}>
             <p className="text-[13px] font-medium text-line-000">
-              {BAND_EMOJI[band]} {labelForBand(band)} · {group.length}
+              {BAND_EMOJI[band]} {labelForBand(band)} ({group.length})
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {group.map(m => {
