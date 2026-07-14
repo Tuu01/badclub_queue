@@ -158,6 +158,8 @@ export default function HomePage() {
           <Link href="/board" className="underline">Leaderboard</Link>
           <span className="text-line-700">·</span>
           <Link href="/me" className="underline">My stats</Link>
+          <span className="text-line-700">·</span>
+          <Link href="/tournaments" className="underline">Tournaments</Link>
           {role === 'PLAYER' && (
             <>
               <span className="text-line-700">·</span>
