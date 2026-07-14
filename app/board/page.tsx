@@ -222,17 +222,31 @@ function ImprovementTab({ data }: { data: BoardData }) {
   );
 }
 
+interface Champion {
+  tournamentId: string; tournamentName: string; date: string; teamName: string; memberNames: string[];
+}
+
 export default function BoardPage() {
   const actor = useActor();
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('SKILL');
+  const [champion, setChampion] = useState<Champion | null>(null);
 
   useEffect(() => {
     fetch('/api/board')
       .then(res => res.json())
       .then(setData)
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/tournaments/champion')
+      .then(res => res.json())
+      .then(b => { if (!cancelled) setChampion(b.champion ?? null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -244,6 +258,19 @@ export default function BoardPage() {
         </div>
         <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>Board</p>
       </header>
+
+      {/* Glory showcase — the last tournament's champions. Separate from
+          skill (tournament data is quarantined); computed on read. */}
+      {champion && (
+        <Link
+          href={`/tournament/${champion.tournamentId}`}
+          className={`mx-4 mb-1 block rounded-xl border-2 border-signal bg-signal-dim/30 p-4 ${TAP}`}
+        >
+          <p className="text-[11px] font-medium text-signal">🏆 CHAMPIONS · {champion.tournamentName}</p>
+          <p className="mt-1 font-display text-[18px] text-line-000" style={{ fontStretch: '110%' }}>{champion.teamName}</p>
+          <p className="mt-1 text-[13px] text-line-400">{champion.memberNames.join(' · ')}</p>
+        </Link>
+      )}
 
       <div className="flex gap-px px-4 py-3">
         {TABS.map(t => (

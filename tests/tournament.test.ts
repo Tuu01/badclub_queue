@@ -7,7 +7,7 @@
 // ============================================================
 
 import { createMemDb } from '../lib/repo-mem';
-import { importTournament, getTournamentView, getPlayerTrophies } from '../lib/tournament';
+import { importTournament, getTournamentView, getPlayerTrophies, getLatestChampion } from '../lib/tournament';
 import { seedMu, SIGMA_INIT } from '../lib/rating';
 import type { TournamentImportInput } from '../lib/tournament';
 
@@ -92,6 +92,11 @@ async function main() {
   check('A has a champion trophy line', trophies.length === 1 && trophies[0].champion === true);
   const cId = byName.get('C')!.id;
   check('C (losing team) has a NON-champion line', (await getPlayerTrophies(db, cId))[0].champion === false);
+
+  console.log('\n■ latest champion showcase (DONE tournament)');
+  const champ = await getLatestChampion(db);
+  check('getLatestChampion → this tournament, team t1',
+    champ?.tournamentId === res.tournamentId && champ?.teamName === 'Team 1' && champ?.memberIds.includes(byName.get('A')!.id) === true);
 
   console.log('\n■ idempotency (name+date) — re-run must not duplicate');
   const again = await importTournament(db, CID, input, { dryRun: false });

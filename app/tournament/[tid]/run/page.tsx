@@ -82,7 +82,13 @@ function Inner({ tid }: { tid: string }) {
           <Link href="/admin/tournament" className="underline">Tournaments</Link>
         </div>
       </div>
-      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>{t.name} · running</p>
+      <div className="flex items-center justify-between">
+        <p className="font-display text-xl" style={{ fontStretch: '115%' }}>{t.name} · running</p>
+        <button disabled={busy} onClick={async () => { if (!confirm('End the tournament? The champion gets crowned and it becomes read-only.')) return; await act({ action: 'end' }); router.push(`/tournament/${tid}`); }}
+          className={`min-h-[40px] rounded-lg border border-line-700 px-3 text-[13px] text-line-400 disabled:opacity-40 ${TAP}`}>
+          End tournament
+        </button>
+      </div>
       {err && <p className="text-[13px] text-signal">{err}</p>}
 
       {/* Court columns */}

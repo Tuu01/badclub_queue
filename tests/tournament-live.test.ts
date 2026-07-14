@@ -8,7 +8,7 @@
 
 import { createMemDb } from '../lib/repo-mem';
 import {
-  createTournament, saveTeams, finalizeTeams, addSubstitution,
+  createTournament, saveTeams, finalizeTeams, endTournament, addSubstitution,
   scheduleGame, startClock, recordTournamentResult, undoTournamentResult,
   getTournamentView,
 } from '../lib/tournament';
@@ -84,6 +84,12 @@ async function main() {
   const t1 = (await getTournamentView(db, tid))!.tournament.teams.find(t => t.id === 't1')!;
   check('roster reflects the sub (a2 → a9)', t1.playerIds.includes('a9') && !t1.playerIds.includes('a2'));
   check('sub is logged', t1.substitutions?.length === 1 && t1.substitutions[0].out === 'a2' && t1.substitutions[0].in === 'a9');
+
+  console.log('\n■ end tournament (LIVE → DONE)');
+  await endTournament(db, tid);
+  check('status DONE after end', (await getTournamentView(db, tid))!.tournament.status === 'DONE');
+  await endTournament(db, tid);
+  check('end is idempotent', (await getTournamentView(db, tid))!.tournament.status === 'DONE');
 
   console.log('\n■ ⛔ SEPARATION — no club skill written by any of this');
   check('no ratings doc created', !(await db.doc(`clubs/${CID}/private/ratings`).get()).exists);

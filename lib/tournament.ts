@@ -277,6 +277,30 @@ export async function getPlayerTrophies(db: Db, playerId: PlayerId): Promise<Tro
   return out.sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+export interface ChampionShowcase {
+  tournamentId: string;
+  tournamentName: string;
+  date: string;
+  teamName: string;
+  memberIds: PlayerId[];
+}
+
+/** The champion of the most recent COMPLETED (DONE) tournament — for the
+ *  glory showcase on /board. Computed on read; null if none finished. A
+ *  LIVE tournament isn't "won" yet, so it's deliberately excluded. */
+export async function getLatestChampion(db: Db): Promise<ChampionShowcase | null> {
+  const done = (await listTournaments(db)).filter(t => t.status === 'DONE'); // newest first
+  for (const t of done) {
+    const games = (await db.collection(`tournaments/${t.id}/games`).get()).docs
+      .map(d => d.data() as unknown as TournamentGame);
+    const champId = championTeamId(t, games);
+    if (!champId) continue;
+    const team = t.teams.find(tm => tm.id === champId)!;
+    return { tournamentId: t.id, tournamentName: t.name, date: t.date, teamName: team.name, memberIds: team.playerIds };
+  }
+  return null;
+}
+
 // ============================================================
 // LIVE LIFECYCLE — Phases 1-3 (create → setup/finalize → run).
 //
@@ -333,6 +357,18 @@ export async function finalizeTeams(db: Db, tid: string): Promise<void> {
       throw new Error('need at least 2 teams of at least 2 players');
     }
     tx.update(ref, doc({ teamsFinalized: true, status: 'LIVE' }));
+  });
+}
+
+/** LIVE → DONE. Crowns the champion (the winner is then computed on read)
+ *  and makes it eligible for the /board showcase. Idempotent. */
+export async function endTournament(db: Db, tid: string): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = db.doc(`tournaments/${tid}`);
+    const t = (await tx.get(ref)).data() as unknown as TournamentDoc | undefined;
+    if (!t) throw new Error('tournament not found');
+    if (t.status === 'DONE') return; // idempotent
+    tx.update(ref, doc({ status: 'DONE' }));
   });
 }
 
