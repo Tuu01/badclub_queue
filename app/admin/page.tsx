@@ -150,7 +150,6 @@ function ManagerRiskCalculator() {
 }
 
 export default function AdminHubPage() {
-  const { session, loading } = useActiveSession();
   const actor = useActor();
 
   return (
@@ -165,13 +164,6 @@ export default function AdminHubPage() {
         <Card href="/admin/sessions" title="Sessions" subtitle="Create a session, or view every session by date." />
         <Card href="/admin/players" title="Players" subtitle="Manage the club roster and seed ranking." />
         <Card href="/admin/tournament" title="Tournaments" subtitle="Create and run a tournament, or import history." />
-        {!loading && session && (
-          <Card
-            href={session.status === 'LIVE' ? '/session' : '/'}
-            title="Go to session"
-            subtitle={session.status === 'LIVE' ? 'Session is live.' : `Upcoming — ${session.date}.`}
-          />
-        )}
 
         <ManagerRiskCalculator />
         <RecalculateCard />
