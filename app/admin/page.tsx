@@ -165,7 +165,7 @@ export default function AdminHubPage() {
         <Card href="/admin/session/new" title="New session" subtitle="Set the play date and roster." />
         <Card href="/admin/players" title="Players" subtitle="Manage the club roster and seed ranking." />
         <Card href="/admin/sessions" title="All sessions" subtitle="Every session ever created, by date." />
-        <Card href="/admin/tournament/import" title="Import tournament" subtitle="Bring in historical tournament data (JSON)." />
+        <Card href="/admin/tournament" title="Tournaments" subtitle="Create and run a tournament, or import history." />
         {!loading && session && (
           <Card
             href={session.status === 'LIVE' ? '/session' : '/'}
