@@ -79,10 +79,7 @@ function Inner({ tid }: { tid: string }) {
     <main className="mx-auto min-h-dvh max-w-xl space-y-4 bg-court-900 p-4 text-line-000">
       <div className="flex items-center justify-between">
         {actor && <WhoAmI name={actor.name} short />}
-        <div className="flex gap-3 text-[13px] text-line-400">
-          <Link href={`/tournament/${tid}`} className="underline">Standings</Link>
-          <Link href="/admin/tournament" className="underline">Tournaments</Link>
-        </div>
+        <Link href="/" className="text-[13px] text-line-400">← Home</Link>
       </div>
       <div className="flex items-center justify-between">
         <p className="font-display text-xl" style={{ fontStretch: '115%' }}>{t.name} · running</p>
@@ -144,6 +141,15 @@ function Inner({ tid }: { tid: string }) {
 
       <ScheduleForm view={view} busy={busy} onSchedule={(b) => act(b)} />
       <SubstituteForm view={view} busy={busy} onSub={(b) => act(b)} />
+
+      {/* footer nav — same shape as the other screens */}
+      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
+        <Link href="/" className="underline">Home</Link>
+        <span className="text-line-700">·</span>
+        <Link href={`/tournament/${tid}`} className="underline">Standings</Link>
+        <span className="text-line-700">·</span>
+        <Link href="/admin/tournament" className="underline">Tournaments</Link>
+      </div>
 
       {/* 60s undo */}
       {last && undoSecs > 0 && (
