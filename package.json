@@ -11,7 +11,8 @@
     "test:repo": "tsx tests/repo-mem.test.ts",
     "test:rebuild": "tsx tests/rebuild.test.ts",
     "test:tournament": "tsx tests/tournament.test.ts",
-    "test:safe": "npm test && npm run test:repo && npm run test:rebuild && npm run test:tournament",
+    "test:tournament-live": "tsx tests/tournament-live.test.ts",
+    "test:safe": "npm test && npm run test:repo && npm run test:rebuild && npm run test:tournament && npm run test:tournament-live",
     "test:integration": "tsx tests/firestore-uc5.test.ts",
     "check:firebase": "tsx scripts/check-firebase.ts"
   },

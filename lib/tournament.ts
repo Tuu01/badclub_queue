@@ -10,10 +10,13 @@
 // never recomputed on write. 33 games is instant; that's the point.
 // ============================================================
 
-import type { Db } from './repo';
+import type { Db, DocumentData } from './repo';
 import type { PlayerId } from './types';
 import type { TournamentDoc, TournamentGame, TournamentTeam } from './tournament-types';
 import { createPlayer, type PublicPlayerDoc } from './firestore';
+
+// typed docs → the loose DocumentData that set()/update() accept.
+const doc = (o: object): DocumentData => o as DocumentData;
 
 // ---------- import input (the shape of vlong-clean.json) ----------
 export interface ImportPlayer { name: string; vlongId?: string; div: 1 | 2; gender: 'M' | 'F'; bio?: string; }
@@ -272,4 +275,203 @@ export async function getPlayerTrophies(db: Db, playerId: PlayerId): Promise<Tro
     });
   }
   return out.sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+// ============================================================
+// LIVE LIFECYCLE — Phases 1-3 (create → setup/finalize → run).
+//
+// REUSED from the session engine's spirit: idempotency guards, a 60s
+// undo backed by an audit log. NOT reused: suggestMatch, buildQueue,
+// mode, starvation — meaningless when teams are fixed and the bracket is
+// on paper. And, as everywhere in this file, ZERO rating/pairStats.
+// ============================================================
+
+// ---------- PHASE 1 · CREATE ----------
+export async function createTournament(
+  db: Db, args: { name: string; date: string; venue?: string; courtCount: number }, now = Date.now(),
+): Promise<{ tid: string; created: boolean }> {
+  const tid = tournamentIdFor(args.name, args.date);
+  const ref = db.doc(`tournaments/${tid}`);
+  if ((await ref.get()).exists) return { tid, created: false };
+  const t: TournamentDoc = {
+    id: tid, name: norm(args.name), date: norm(args.date),
+    ...(args.venue ? { venue: args.venue } : {}),
+    courtCount: args.courtCount, teamsFinalized: false, teams: [],
+    status: 'DRAFT', imported: false, createdAt: now,
+  };
+  await ref.set(doc(t));
+  return { tid, created: true };
+}
+
+export async function listTournaments(db: Db): Promise<TournamentDoc[]> {
+  return (await db.collection('tournaments').get()).docs
+    .map(d => d.data() as unknown as TournamentDoc)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+// ---------- PHASE 2 · SETUP TEAMS (the gate) ----------
+/** Data entry only — the admin draws on paper; the app just stores it.
+ *  Refused once finalized (frozen). */
+export async function saveTeams(db: Db, tid: string, teams: TournamentTeam[]): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = db.doc(`tournaments/${tid}`);
+    const t = (await tx.get(ref)).data() as unknown as TournamentDoc | undefined;
+    if (!t) throw new Error('tournament not found');
+    if (t.teamsFinalized) throw new Error('teams are finalized — they cannot be redrawn');
+    tx.update(ref, doc({ teams }));
+  });
+}
+
+/** THE ONE-WAY GATE. teamsFinalized = true, status → LIVE. */
+export async function finalizeTeams(db: Db, tid: string): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = db.doc(`tournaments/${tid}`);
+    const t = (await tx.get(ref)).data() as unknown as TournamentDoc | undefined;
+    if (!t) throw new Error('tournament not found');
+    if (t.teamsFinalized) return; // idempotent
+    if (t.teams.length < 2 || t.teams.some(tm => tm.playerIds.length < 2)) {
+      throw new Error('need at least 2 teams of at least 2 players');
+    }
+    tx.update(ref, doc({ teamsFinalized: true, status: 'LIVE' }));
+  });
+}
+
+/** A no-show, RECORDED not commanded (UC-1). Team stays frozen; the swap
+ *  is logged AND the effective roster reflects who actually plays. */
+export async function addSubstitution(
+  db: Db, tid: string, teamId: string, sub: { out: PlayerId; in: PlayerId }, now = Date.now(),
+): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = db.doc(`tournaments/${tid}`);
+    const t = (await tx.get(ref)).data() as unknown as TournamentDoc | undefined;
+    if (!t) throw new Error('tournament not found');
+    if (!t.teamsFinalized) throw new Error('finalize teams before substituting');
+    const teams = t.teams.map(tm => {
+      if (tm.id !== teamId) return tm;
+      if (!tm.playerIds.includes(sub.out)) throw new Error('the outgoing player is not on that team');
+      return {
+        ...tm,
+        playerIds: tm.playerIds.map(id => (id === sub.out ? sub.in : id)),
+        substitutions: [...(tm.substitutions ?? []), { out: sub.out, in: sub.in, at: now }],
+      };
+    });
+    tx.update(ref, doc({ teams }));
+  });
+}
+
+// ---------- PHASE 3 · RUN MATCHES ----------
+/** earliest SCHEDULED game id on a court, or null if the court already
+ *  has an ONGOING game. Deterministic (id order). */
+function nextOnCourt(games: TournamentGame[], courtIdx: number | null): string | null {
+  if (courtIdx == null) return null; // a game with no court can't auto-promote
+  const onCourt = games.filter(g => g.courtIdx === courtIdx);
+  if (onCourt.some(g => g.status === 'ONGOING')) return null;
+  return onCourt.filter(g => g.status === 'SCHEDULED').sort((a, b) => a.id.localeCompare(b.id))[0]?.id ?? null;
+}
+
+/** Queue a match. Validation is the whole point: p1+p2 on teamA, p3+p4
+ *  on teamB, and the teams differ. Lands ONGOING (clock not started) if
+ *  the court is empty, else SCHEDULED behind the queue. */
+export async function scheduleGame(
+  db: Db, tid: string,
+  args: { round: string; courtIdx: number; teamA: string; teamB: string; pairA: [PlayerId, PlayerId]; pairB: [PlayerId, PlayerId] },
+): Promise<{ gameId: string }> {
+  return db.runTransaction(async tx => {
+    const t = (await tx.get(db.doc(`tournaments/${tid}`))).data() as unknown as TournamentDoc | undefined;
+    if (!t) throw new Error('tournament not found');
+    if (!t.teamsFinalized) throw new Error('finalize teams first');
+    const teamA = t.teams.find(x => x.id === args.teamA);
+    const teamB = t.teams.find(x => x.id === args.teamB);
+    if (!teamA || !teamB) throw new Error('unknown team');
+    if (teamA.id === teamB.id) throw new Error('a game needs two different teams');
+    if (!args.pairA.every(p => teamA.playerIds.includes(p))) throw new Error('pairA are not both on team A');
+    if (!args.pairB.every(p => teamB.playerIds.includes(p))) throw new Error('pairB are not both on team B');
+
+    const gamesCol = db.collection(`tournaments/${tid}/games`);
+    const games = (await tx.get(gamesCol)).docs.map(d => d.data() as unknown as TournamentGame);
+    const courtBusy = games.some(g => g.courtIdx === args.courtIdx && (g.status === 'ONGOING' || g.status === 'SCHEDULED'));
+    const gRef = gamesCol.doc();
+    const game: TournamentGame = {
+      id: gRef.id, round: args.round, courtIdx: args.courtIdx,
+      teamA: args.teamA, teamB: args.teamB,
+      playerIds: [args.pairA[0], args.pairA[1], args.pairB[0], args.pairB[1]],
+      winner: null, scoreLoser: null, startedAt: null, endedAt: null,
+      status: courtBusy ? 'SCHEDULED' : 'ONGOING', // empty court → on court, clock not started
+    };
+    tx.set(gRef, doc(game));
+    return { gameId: gRef.id };
+  });
+}
+
+/** The BRAKE: auto-promotion puts a match ON the court (ONGOING); a human
+ *  taps this to start the clock, once the four people are actually there. */
+export async function startClock(db: Db, tid: string, gid: string, now = Date.now()): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = db.doc(`tournaments/${tid}/games/${gid}`);
+    const g = (await tx.get(ref)).data() as unknown as TournamentGame | undefined;
+    if (!g) throw new Error('game not found');
+    if (g.status !== 'ONGOING') throw new Error('game is not on court');
+    if (g.startedAt != null) return; // idempotent
+    tx.update(ref, doc({ startedAt: now }));
+  });
+}
+
+/** Record the winner → FINISHED, then AUTO-PROMOTE the next scheduled game
+ *  on that court to ONGOING (clock NOT started). Idempotent; audited for
+ *  the 60s undo. NO rating, NO pairStats — this is the quarantine. */
+export async function recordTournamentResult(
+  db: Db, tid: string, gid: string,
+  args: { winner: 'A' | 'B'; scoreLoser?: number | null; actor?: string }, now = Date.now(),
+): Promise<{ alreadyRecorded: boolean; auditLogId: string | null; promotedGameId: string | null }> {
+  return db.runTransaction(async tx => {
+    const gRef = db.doc(`tournaments/${tid}/games/${gid}`);
+    const gamesCol = db.collection(`tournaments/${tid}/games`);
+    const gSnap = await tx.get(gRef);
+    const g = gSnap.data() as unknown as TournamentGame | undefined;
+    if (!g) throw new Error('game not found');
+    if (g.status === 'FINISHED') return { alreadyRecorded: true, auditLogId: null, promotedGameId: null };
+
+    const others = (await tx.get(gamesCol)).docs
+      .map(d => d.data() as unknown as TournamentGame)
+      .filter(x => x.id !== gid);
+    const promotedGameId = nextOnCourt(others, g.courtIdx);
+
+    const aRef = db.collection(`tournaments/${tid}/audit`).doc();
+    tx.update(gRef, doc({ winner: args.winner, scoreLoser: args.scoreLoser ?? null, endedAt: now, status: 'FINISHED' }));
+    if (promotedGameId) tx.update(db.doc(`tournaments/${tid}/games/${promotedGameId}`), doc({ status: 'ONGOING' }));
+    tx.set(aRef, doc({
+      gameId: gid,
+      before: { winner: g.winner, scoreLoser: g.scoreLoser, endedAt: g.endedAt, status: g.status },
+      promotedGameId: promotedGameId ?? null, at: now, actor: args.actor ?? null,
+    }));
+    return { alreadyRecorded: false, auditLogId: aRef.id, promotedGameId };
+  });
+}
+
+/** Undo a just-recorded result within 60s: restore the game, and demote
+ *  the auto-promoted next game back to SCHEDULED (only if not yet started). */
+export async function undoTournamentResult(
+  db: Db, tid: string, auditLogId: string, now = Date.now(), windowMs = 60_000,
+): Promise<{ ok: boolean; error?: string }> {
+  return db.runTransaction(async tx => {
+    const aRef = db.doc(`tournaments/${tid}/audit/${auditLogId}`);
+    const a = (await tx.get(aRef)).data() as
+      | { gameId: string; before: Partial<TournamentGame>; promotedGameId: string | null; at: number } | undefined;
+    if (!a) return { ok: false, error: 'nothing to undo' };
+    if (now - a.at > windowMs) return { ok: false, error: 'more than 60 seconds ago — can no longer be undone' };
+
+    const promoted = a.promotedGameId
+      ? (await tx.get(db.doc(`tournaments/${tid}/games/${a.promotedGameId}`))).data() as unknown as TournamentGame | undefined
+      : undefined;
+
+    tx.update(db.doc(`tournaments/${tid}/games/${a.gameId}`), doc({
+      winner: a.before.winner ?? null, scoreLoser: a.before.scoreLoser ?? null,
+      endedAt: a.before.endedAt ?? null, status: a.before.status ?? 'ONGOING',
+    }));
+    if (a.promotedGameId && promoted && promoted.status === 'ONGOING' && promoted.startedAt == null) {
+      tx.update(db.doc(`tournaments/${tid}/games/${a.promotedGameId}`), doc({ status: 'SCHEDULED' }));
+    }
+    tx.delete(aRef);
+    return { ok: true };
+  });
 }

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { getTournamentView } from '@/lib/tournament';
+import {
+  getTournamentView, saveTeams, finalizeTeams, addSubstitution,
+  scheduleGame, startClock, recordTournamentResult, undoTournamentResult,
+} from '@/lib/tournament';
 import type { PublicPlayerDoc } from '@/lib/firestore';
+import { requireRole } from '@/lib/auth';
 import { CLUB_ID } from '@/lib/constants';
 
 // PLAYER-tier — view-only, public read (same as /board). Winrates are
@@ -19,4 +23,54 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tid
     names[p.id] = p.name;
   }
   return NextResponse.json({ ...view, names });
+}
+
+// One POST endpoint, action-discriminated. Structural actions (setup,
+// finalize, schedule) are ADMIN; courtside operations (substitute, start
+// clock, record, undo) are MANAGER+ so helpers can run a court.
+export async function POST(req: NextRequest, { params }: { params: Promise<{ tid: string }> }) {
+  const { tid } = await params;
+  const body = await req.json().catch(() => null);
+  const action = body?.action as string | undefined;
+  const ADMIN = ['saveTeams', 'finalize', 'schedule'];
+  const roleErr = requireRole(req, ADMIN.includes(action ?? '') ? 'ADMIN' : 'MANAGER');
+  if (roleErr) return roleErr;
+
+  try {
+    switch (action) {
+      case 'saveTeams':
+        await saveTeams(adminDb, tid, body.teams);
+        return NextResponse.json({ ok: true });
+      case 'finalize':
+        await finalizeTeams(adminDb, tid);
+        return NextResponse.json({ ok: true });
+      case 'substitute':
+        await addSubstitution(adminDb, tid, body.teamId, { out: body.out, in: body.in });
+        return NextResponse.json({ ok: true });
+      case 'schedule': {
+        const res = await scheduleGame(adminDb, tid, {
+          round: body.round ?? '', courtIdx: body.courtIdx,
+          teamA: body.teamA, teamB: body.teamB, pairA: body.pairA, pairB: body.pairB,
+        });
+        return NextResponse.json(res);
+      }
+      case 'start':
+        await startClock(adminDb, tid, body.gid);
+        return NextResponse.json({ ok: true });
+      case 'result': {
+        const res = await recordTournamentResult(adminDb, tid, body.gid, {
+          winner: body.winner, scoreLoser: body.scoreLoser ?? null, actor: body.actor,
+        });
+        return NextResponse.json(res);
+      }
+      case 'undo': {
+        const res = await undoTournamentResult(adminDb, tid, body.auditLogId);
+        return NextResponse.json(res, { status: res.ok ? 200 : 400 });
+      }
+      default:
+        return NextResponse.json({ error: 'unknown action' }, { status: 400 });
+    }
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
 }
