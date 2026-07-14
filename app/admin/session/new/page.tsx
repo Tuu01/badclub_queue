@@ -171,7 +171,7 @@ function NewSessionPageInner() {
       <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
         <div className="flex items-center justify-between">
           {actor && <WhoAmI name={actor.name} short />}
-          <Link href="/admin" className="text-[13px] text-line-400">← Back to admin</Link>
+          <Link href="/admin/sessions" className="text-[13px] text-line-400">← Sessions</Link>
         </div>
         <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
           {editingId ? 'Edit next session — Step 1' : 'New session — Step 1'}
@@ -266,7 +266,7 @@ function NewSessionPageInner() {
     <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
       <div className="flex items-center justify-between">
         {actor && <WhoAmI name={actor.name} short />}
-        <Link href="/admin" className="text-[13px] text-line-400">← Back to admin</Link>
+        <Link href="/admin/sessions" className="text-[13px] text-line-400">← Sessions</Link>
       </div>
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
         {editingId ? 'Edit next session — Step 2' : 'New session — Step 2'}
