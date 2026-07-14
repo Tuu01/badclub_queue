@@ -264,9 +264,9 @@ export default function BoardPage() {
       {champion && (
         <Link
           href={`/tournament/${champion.tournamentId}`}
-          className={`mx-4 mb-1 block rounded-xl border-2 border-signal bg-signal-dim/30 p-4 ${TAP}`}
+          className={`mx-4 mb-1 block rounded-xl border border-line-000 bg-court-800 p-4 ${TAP}`}
         >
-          <p className="text-[11px] font-medium text-signal">🏆 CHAMPIONS · {champion.tournamentName}</p>
+          <p className="text-[11px] font-medium tracking-wide text-line-400">🏆 CHAMPIONS · {champion.tournamentName}</p>
           <p className="mt-1 font-display text-[18px] text-line-000" style={{ fontStretch: '110%' }}>{champion.teamName}</p>
           <p className="mt-1 text-[13px] text-line-400">{champion.memberNames.join(' · ')}</p>
         </Link>
