@@ -1098,6 +1098,8 @@ export default function SessionPage() {
             MODES.map above) — the footer versions were pure duplicates.
             See CLAUDE.md "ROLES" for why Admin/Log out are role-gated. */}
         <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
+          <Link href="/" className="underline">Home</Link>
+          <span className="text-line-700">·</span>
           <Link href="/board" className="underline">Leaderboard</Link>
           <span className="text-line-700">·</span>
           <Link href="/me" className="underline">My stats</Link>
