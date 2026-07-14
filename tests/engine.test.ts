@@ -147,20 +147,64 @@ console.log('\n■ TIER 3 — ALARM (starvation constraint)');
 }
 
 // =============================================================
-console.log('\n■ Never stacks 4 women onto one court');
+console.log('\n■ Forms proper gender categories (MD / WD / XD)');
 {
+  // Sam, Taylor, Uma, Val are female (index >= 18); everyone else is male.
   const players = makePlayers();
-  // Taylor, Uma, Val, Riley are female (index >= 18)
-  const ids = ['Riley','Sam','Taylor','Uma','Val','Alex','Blake','Casey'];
-  const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 0, 10)]));
+  const womenOn = (team: [PlayerId, PlayerId]) =>
+    team.filter(id => players.get(id)!.gender === 'F').length;
 
-  let allW = 0;
-  for (let t = 0; t < 200; t++) {
+  // (a) A 2-man 2-woman court MUST be split as Mixed (1+1 | 1+1), never 2W-vs-2M.
+  {
+    const ids = ['Sam','Taylor','Alex','Blake'];
+    const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 0, 10)]));
     const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: {},
-                             config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random })!;
-    if (s.four.every(id => players.get(id)!.gender === 'F')) allW++;
+                             config: { ...DEFAULT_CONFIG, topN: 1 }, busy: new Set(), rng: () => 0 })!;
+    check('2M+2W split as Mixed doubles (one woman per team), not women-vs-men',
+          womenOn(s.teamA) === 1 && womenOn(s.teamB) === 1,
+          `→ ${womenOn(s.teamA)}v${womenOn(s.teamB)}`);
   }
-  check(`never stacks 4 women onto the same court (${allW}/200)`, allW === 0, `→ ${allW}`);
+
+  // (b) Women's doubles is now a VALID match — four women must not be refused.
+  {
+    const ids = ['Sam','Taylor','Uma','Val'];
+    const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 0, 10)]));
+    const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: {},
+                             config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random });
+    check('women\'s doubles is allowed (4 women → a valid WD match, not refused)',
+          s !== null && s.four.every(id => players.get(id)!.gender === 'F')
+            && womenOn(s.teamA) === womenOn(s.teamB));
+  }
+
+  // (c) When a proper four is always available (4M + 4W), EVERY pick is gender-proper.
+  {
+    const ids = ['Alex','Blake','Casey','Drew','Sam','Taylor','Uma','Val'];
+    const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 0, 10)]));
+    let improper = 0;
+    for (let t = 0; t < 200; t++) {
+      const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: {},
+                               config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random })!;
+      if (womenOn(s.teamA) !== womenOn(s.teamB)) improper++;
+    }
+    check(`every match is a proper category when one exists (${200 - improper}/200 proper)`,
+          improper === 0, `→ ${improper} improper`);
+  }
+
+  // (d) SOFT rule: the gender penalty never blocks the hard starvation force.
+  //     A lone woman waiting >25 min is still forced in every time.
+  {
+    const ids = ['Alex','Blake','Casey','Drew','Emery','Frankie','Gray','Sam'];
+    const a = new Map<PlayerId, Attendance>(ids.map(id => [id, att(id, 1, 5)]));
+    a.set('Sam', att('Sam', 3, 40)); // starving woman, only woman present
+    let included = 0;
+    for (let t = 0; t < 100; t++) {
+      const s = suggestMatch({ now: NOW, players, attendance: a, pairStats: {},
+                               config: DEFAULT_CONFIG, busy: new Set(), rng: Math.random })!;
+      if (s.four.includes('Sam')) included++;
+    }
+    check(`a starving lone woman is still forced in (soft penalty, not a hard gate) (${included}/100)`,
+          included === 100, `→ ${included}`);
+  }
 }
 
 // =============================================================

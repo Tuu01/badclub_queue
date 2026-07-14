@@ -205,10 +205,18 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
     const waitSum = four4.reduce((s, id) => s + (waitOf.get(id) ?? 0), 0) / MS_PER_MIN;
     const maxGames = Math.max(...four4.map(id => attendance.get(id)!.gamesToday));
 
-    // Don't stack all 4 women onto one court (WD is nearly impossible with 3-5 women/22 people)
-    const allWomen = ps.every(p => p.gender === 'F');
-
     for (const [tA, tB] of splits(four4)) {
+      // Keep matches in proper badminton categories. This depends on the SPLIT,
+      // not just the four: {M,M,F,F} makes Mixed (1+1 | 1+1) OR the lopsided
+      // 2M-vs-2W depending on how you divide it. Count women per team and
+      // penalise the gap — MD/WD/XD all score 0, a woman-vs-all-men team scores
+      // 1×, 2W-vs-2M scores 2×. Replaces the old anti-women's-doubles bias:
+      // with ~1/3 of the club women, WD is now a normal match, not a hazard.
+      const wA = (players.get(tA[0])!.gender === 'F' ? 1 : 0)
+               + (players.get(tA[1])!.gender === 'F' ? 1 : 0);
+      const wB = (players.get(tB[0])!.gender === 'F' ? 1 : 0)
+               + (players.get(tB[1])!.gender === 'F' ? 1 : 0);
+
       const rp = repetition(pairStats, tA[0], tA[1], 'partnered')
                + repetition(pairStats, tB[0], tB[1], 'partnered');
 
@@ -239,7 +247,7 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
         + config.wBalance        * imb
         - config.wWait           * waitSum
         + 2 * maxGames
-        + (allWomen ? config.penaltyAllWomen : 0)
+        + config.wGenderMismatch * Math.abs(wA - wB)
         - 200 * wild;
 
       scored.push({ four: four4, teamA: tA, teamB: tB, cost, rp, ro, imb, waitSum, probA });
