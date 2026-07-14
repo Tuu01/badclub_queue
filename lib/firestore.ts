@@ -863,6 +863,8 @@ export interface PublicPlayerDoc {
   lastPlayedAt: number | null;
   isGuest: boolean;
   active: boolean;
+  /** Optional free-text profile line (imported as-is; may be empty). */
+  bio?: string;
 }
 
 /** clubs/{cid}/private/ratings — one doc, a map of every player. */
@@ -879,7 +881,7 @@ export interface RatingsDoc {
 export async function createPlayer(
   db: Db,
   clubId: string,
-  args: { name: string; gender: 'M' | 'F'; div: 1 | 2 },
+  args: { name: string; gender: 'M' | 'F'; div: 1 | 2; bio?: string },
   now = Date.now(),
 ): Promise<PublicPlayerDoc> {
   const playersRef = db.collection(`clubs/${clubId}/players`);
@@ -897,6 +899,7 @@ export async function createPlayer(
     const player: PublicPlayerDoc = {
       id: ref.id, name: args.name, gender: args.gender, div: args.div,
       seedRank, gamesTotal: 0, lastPlayedAt: null, isGuest: false, active: true,
+      ...(args.bio ? { bio: args.bio } : {}),
     };
 
     const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};

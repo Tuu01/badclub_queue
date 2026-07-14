@@ -10,7 +10,8 @@
     "test": "tsx tests/engine.test.ts",
     "test:repo": "tsx tests/repo-mem.test.ts",
     "test:rebuild": "tsx tests/rebuild.test.ts",
-    "test:safe": "npm test && npm run test:repo && npm run test:rebuild",
+    "test:tournament": "tsx tests/tournament.test.ts",
+    "test:safe": "npm test && npm run test:repo && npm run test:rebuild && npm run test:tournament",
     "test:integration": "tsx tests/firestore-uc5.test.ts",
     "check:firebase": "tsx scripts/check-firebase.ts"
   },

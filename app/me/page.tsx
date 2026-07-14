@@ -6,6 +6,7 @@ import { useActor } from '@/lib/client-identity';
 import { WhoAmI, PageFooter } from '../shared-ui';
 import { labelForBand, BAND_MIN_GAMES } from '@/lib/skill-band';
 import type { BoardData } from '@/lib/firestore';
+import type { TrophyLine } from '@/lib/tournament';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
@@ -22,6 +23,7 @@ export default function MePage() {
   const actor = useActor();
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trophies, setTrophies] = useState<TrophyLine[]>([]);
 
   useEffect(() => {
     fetch('/api/board')
@@ -29,6 +31,16 @@ export default function MePage() {
       .then(setData)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!actor) return;
+    let cancelled = false;
+    fetch(`/api/me/trophies?playerId=${actor.id}`)
+      .then(res => res.json())
+      .then(body => { if (!cancelled) setTrophies(body.trophies ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [actor]);
 
   if (!actor) {
     return (
@@ -62,6 +74,27 @@ export default function MePage() {
         <Link href="/" className="text-[13px] text-line-400">← Home</Link>
       </div>
       <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>{actor.name}</p>
+
+      {/* Tournaments — permanent, never expires, never decays. Computed
+          on read from the games. Champion lines lead. */}
+      {trophies.length > 0 && (
+        <section className="mt-6 space-y-2">
+          {trophies.map(t => (
+            <Link
+              key={t.tournamentId}
+              href={`/tournament/${t.tournamentId}`}
+              className={`flex items-center justify-between rounded-xl border p-3 ${TAP} ${
+                t.champion ? 'border-signal bg-signal-dim/30' : 'border-line-700'
+              }`}
+            >
+              <span className="text-[15px] text-line-000">
+                {t.champion ? '🏆 Champion · ' : ''}{t.tournamentName}
+              </span>
+              <span className="tabular text-[13px] text-line-400">{t.teamName} · {t.wins}–{t.losses}</span>
+            </Link>
+          ))}
+        </section>
+      )}
 
       {/* Mixing */}
       <section className="mt-6">
