@@ -185,7 +185,8 @@ Publishing a number that's wrong by ±8 in front of 22 people creates drama, **a
 
 > **DECISION 2026-07-14 — provisional skill BANDS (overrides the above, for the band only).**
 > Owner-approved. Waiting ~6 months to see *anything* skill-related is too long,
-> so a coarse **band** (Beginner / Intermediate / Advanced) now shows from the
+> so a coarse **band** (displayed as Tier 1 · Gold / Tier 2 · Silver /
+> Tier 3 · Bronze; internal codes ADVANCED/INTERMEDIATE/BEGINNER) now shows from the
 > first few games on `/me` and the `/board` Skill tab. This does NOT reopen the
 > door to an early *number* — the precise-score gate stands untouched.
 >

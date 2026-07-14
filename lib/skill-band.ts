@@ -40,10 +40,13 @@ export const BAND_MAX = 60; // Advanced floor
 // moved off the pure seed a few times.
 export const BAND_MIN_GAMES = 3;
 
+// Display names only — the internal band codes stay BEGINNER/INTERMEDIATE/
+// ADVANCED (so logic, stored values, and tests are unchanged); these are
+// what players see. Tier 1 = the top.
 const LABEL: Record<SkillBand, string> = {
-  BEGINNER: 'Beginner',
-  INTERMEDIATE: 'Intermediate',
-  ADVANCED: 'Advanced',
+  BEGINNER: 'Tier 3 · Bronze',
+  INTERMEDIATE: 'Tier 2 · Silver',
+  ADVANCED: 'Tier 1 · Gold',
 };
 
 export interface SkillBandResult {
