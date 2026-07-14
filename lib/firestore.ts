@@ -33,9 +33,10 @@ import { suggestMatch } from './matchmaking';
 import { updateRatings, seedMu, SIGMA_INIT, isConverged } from './rating';
 import { computeSkillBand, type SkillBand } from './skill-band';
 
-import {
-  getFirestore, Timestamp, type Transaction, type Firestore,
-} from 'firebase-admin/firestore';
+// The data layer talks to a Db INTERFACE, not firebase-admin directly —
+// so the same code runs against real Firestore (repo-fs) and the
+// in-memory mock (repo-mem). See repo.ts.
+import type { Db, Tx } from './repo';
 
 // ============================================================
 // DATA STRUCTURE
@@ -178,7 +179,7 @@ export interface PairStatsDoc {
  * it is already live in the UI. See USECASES.md UC-17.
  */
 export async function checkInBatch(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   clubId: string,
   playerIds: PlayerId[],
@@ -188,7 +189,7 @@ export async function checkInBatch(
   const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
   const playersRef = db.collection(`clubs/${clubId}/players`);
 
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
 
@@ -253,7 +254,7 @@ export async function checkInBatch(
  * UC-7b, deferred).
  */
 export async function recordResult(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   clubId: string,
   args: {
@@ -271,7 +272,7 @@ export async function recordResult(
   const rRef = db.doc(`clubs/${clubId}/private/ratings`);
   const aRef = db.collection(`sessions/${sessionId}/audit`).doc();
 
-  return db.runTransaction(async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Tx) => {
     // --- READ EVERYTHING FIRST (Firestore requires: all reads before any write) ---
     const [sSnap, gSnap, pSnap, rSnap] = await Promise.all([
       tx.get(sRef), tx.get(gRef), tx.get(pRef), tx.get(rRef),
@@ -464,13 +465,13 @@ export async function recordResult(
  * here in the "dirty shell" without touching that interface.
  */
 export async function setGameScore(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   gameId: string,
   scores: { scoreWinner: number; scoreLoser: number },
 ): Promise<{ ok: true }> {
   const gRef = db.doc(`sessions/${sessionId}/games/${gameId}`);
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(gRef);
     const g = snap.data() as Game | undefined;
     if (!g || g.winner === null) return;
@@ -498,7 +499,7 @@ export interface GameHistoryEntry {
   endedAt: number | null;
 }
 
-export async function getGameHistory(db: Firestore, sessionId: string): Promise<GameHistoryEntry[]> {
+export async function getGameHistory(db: Db, sessionId: string): Promise<GameHistoryEntry[]> {
   const gamesSnap = await db.collection(`sessions/${sessionId}/games`).get();
   return gamesSnap.docs
     .map(d => d.data() as Game & { scoreWinner: number | null })
@@ -546,7 +547,7 @@ export class ConflictError extends Error {
 }
 
 export async function assignCourt(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   args: {
     courtIdx: number;
@@ -567,7 +568,7 @@ export async function assignCourt(
   const gRef = db.collection(`sessions/${sessionId}/games`).doc();
   const lRef = db.collection(`sessions/${sessionId}/audit`).doc();
 
-  return db.runTransaction(async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
 
@@ -653,7 +654,7 @@ export async function assignCourt(
 export class SwapError extends Error {}
 
 export async function swapPlayerOnCourt(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   args: { courtIdx: number; outId: PlayerId; inId: PlayerId; actor: string },
   now = Date.now(),
@@ -661,7 +662,7 @@ export async function swapPlayerOnCourt(
   const sRef = db.doc(`sessions/${sessionId}`);
   const lRef = db.collection(`sessions/${sessionId}/audit`).doc();
 
-  return db.runTransaction(async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
 
@@ -786,7 +787,7 @@ export function buildMatchmakingInput(
 
 /** Suggestion for one court. LOCKS NOBODY — display only. */
 export async function getSuggestion(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   clubId: string,
   now = Date.now(),
@@ -819,13 +820,13 @@ export async function getSuggestion(
  * C(22,2) = 231 pairs. One write.
  */
 export async function bumpCoAttendance(
-  db: Firestore,
+  db: Db,
   clubId: string,
   presentIds: PlayerId[],
   now = Date.now(),
 ): Promise<void> {
   const ref = db.doc(`clubs/${clubId}/meta/pairStats`);
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(ref);
     const stats = (snap.data() as PairStatsDoc | undefined)?.pairs ?? {};
 
@@ -876,7 +877,7 @@ export interface RatingsDoc {
  * reorderDivision).
  */
 export async function createPlayer(
-  db: Firestore,
+  db: Db,
   clubId: string,
   args: { name: string; gender: 'M' | 'F'; div: 1 | 2 },
   now = Date.now(),
@@ -885,7 +886,7 @@ export async function createPlayer(
   const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
   const ref = playersRef.doc();
 
-  return db.runTransaction(async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Tx) => {
     const [divSnap, ratingsSnap] = await Promise.all([
       tx.get(playersRef.where('div', '==', args.div).where('active', '==', true)),
       tx.get(ratingsRef),
@@ -909,7 +910,7 @@ export async function createPlayer(
 
 /** Edit name / gender / active. Does NOT edit div or seedRank here — use reorderDivision. */
 export async function updatePlayer(
-  db: Firestore,
+  db: Db,
   clubId: string,
   playerId: PlayerId,
   patch: Partial<Pick<PublicPlayerDoc, 'name' | 'gender' | 'active'>>,
@@ -923,7 +924,7 @@ export async function updatePlayer(
  * games actually played, not a rank the admin assigned.
  */
 export async function reorderDivision(
-  db: Firestore,
+  db: Db,
   clubId: string,
   div: 1 | 2,
   orderedIds: PlayerId[],
@@ -932,7 +933,7 @@ export async function reorderDivision(
   const playersRef = db.collection(`clubs/${clubId}/players`);
   const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
 
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const [playerSnaps, ratingsSnap] = await Promise.all([
       Promise.all(orderedIds.map(id => tx.get(playersRef.doc(id)))),
       tx.get(ratingsRef),
@@ -985,7 +986,7 @@ export class SessionExistsError extends Error {
 }
 
 export async function ensureSessionAndPlayers(
-  db: Firestore,
+  db: Db,
   clubId: string,
   args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
   now = Date.now(),
@@ -994,7 +995,7 @@ export async function ensureSessionAndPlayers(
   const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
   const playersRef = db.collection(`clubs/${clubId}/players`);
 
-  return db.runTransaction(async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Tx) => {
     const [sSnap, ratingsSnap, playerSnaps] = await Promise.all([
       tx.get(sRef),
       tx.get(ratingsRef),
@@ -1034,7 +1035,7 @@ export async function ensureSessionAndPlayers(
  * co-attendance is bumped here, not deferred to /checkin.
  */
 export async function createSessionRoster(
-  db: Firestore,
+  db: Db,
   clubId: string,
   args: { sessionId: string; courtCount: number; playerIds: PlayerId[] },
   now = Date.now(),
@@ -1067,11 +1068,11 @@ export class AlreadyLiveError extends Error {
   }
 }
 
-export async function startSession(db: Firestore, sessionId: string): Promise<void> {
+export async function startSession(db: Db, sessionId: string): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
   const liveQuery = db.collection('sessions').where('status', '==', 'LIVE');
 
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const [sSnap, liveSnap] = await Promise.all([tx.get(sRef), tx.get(liveQuery)]);
     if (!sSnap.exists) throw new Error('session not found');
 
@@ -1107,10 +1108,10 @@ export class NotLiveError extends Error {
  * present member's end-of-session mu/sigma/gamesTotal. Data
  * collection only; nothing reads this field yet.
  */
-export async function endSession(db: Firestore, clubId: string, sessionId: string, now = Date.now()): Promise<void> {
+export async function endSession(db: Db, clubId: string, sessionId: string, now = Date.now()): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
 
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const sSnap = await tx.get(sRef);
     const s = sSnap.data() as SessionDoc | undefined;
     if (!s || s.status !== 'LIVE') throw new NotLiveError();
@@ -1160,7 +1161,7 @@ export class NotDraftError extends Error {
  * DRAFT before it's ever gone LIVE isn't a second real session.
  */
 export async function setDraftRoster(
-  db: Firestore,
+  db: Db,
   clubId: string,
   sessionId: string,
   args: { courtCount: number; playerIds: PlayerId[] },
@@ -1169,7 +1170,7 @@ export async function setDraftRoster(
   const ratingsRef = db.doc(`clubs/${clubId}/private/ratings`);
   const playersRef = db.collection(`clubs/${clubId}/players`);
 
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const [sSnap, ratingsSnap, playerSnaps] = await Promise.all([
       tx.get(sRef),
       tx.get(ratingsRef),
@@ -1205,9 +1206,9 @@ export async function setDraftRoster(
  * fixed: the date is the document id, so there's no "rename" — delete
  * the wrong one, create a fresh one at the correct date.
  */
-export async function deleteDraftSession(db: Firestore, sessionId: string): Promise<void> {
+export async function deleteDraftSession(db: Db, sessionId: string): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc | undefined;
     if (!s || s.status !== 'DRAFT') throw new NotDraftError();
@@ -1229,7 +1230,7 @@ export async function deleteDraftSession(db: Firestore, sessionId: string): Prom
  * (see the DRAFT-only note above). That's a real, accepted consequence
  * of "not undoable," not a bug.
  */
-export async function deleteSession(db: Firestore, sessionId: string): Promise<void> {
+export async function deleteSession(db: Db, sessionId: string): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
   const [gamesSnap, auditSnap] = await Promise.all([
     db.collection(`sessions/${sessionId}/games`).get(),
@@ -1247,7 +1248,7 @@ export async function deleteSession(db: Firestore, sessionId: string): Promise<v
 // ============================================================
 
 export async function setMode(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   mode: 'OFF' | 'RECORD' | 'ASSIGN',
 ): Promise<void> {
@@ -1263,13 +1264,13 @@ export async function setMode(
 // ============================================================
 
 export async function setPaused(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   playerId: PlayerId,
   paused: boolean,
 ): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
     const cur = s.attendance[playerId];
@@ -1290,13 +1291,13 @@ export async function setPaused(
 // ============================================================
 
 export async function setLeft(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   playerId: PlayerId,
   now = Date.now(),
 ): Promise<void> {
   const sRef = db.doc(`sessions/${sessionId}`);
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
     const cur = s.attendance[playerId];
@@ -1322,7 +1323,7 @@ const GUEST_SIGMA = 15;
 const GUEST_MU = 50;
 
 export async function addGuest(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   args: { name: string; gender: 'M' | 'F' },
   now = Date.now(),
@@ -1330,7 +1331,7 @@ export async function addGuest(
   const sRef = db.doc(`sessions/${sessionId}`);
   const id = `guest-${db.collection('_ids').doc().id}`;
 
-  await db.runTransaction(async (tx: Transaction) => {
+  await db.runTransaction(async (tx: Tx) => {
     const snap = await tx.get(sRef);
     const s = snap.data() as SessionDoc;
 
@@ -1358,7 +1359,7 @@ export async function addGuest(
 // ============================================================
 
 export async function undoResult(
-  db: Firestore,
+  db: Db,
   sessionId: string,
   clubId: string,
   auditLogId: string,
@@ -1369,7 +1370,7 @@ export async function undoResult(
   const pRef = db.doc(`clubs/${clubId}/meta/pairStats`);
   const rRef = db.doc(`clubs/${clubId}/private/ratings`);
 
-  return db.runTransaction(async (tx: Transaction) => {
+  return db.runTransaction(async (tx: Tx) => {
     const [aSnap, sSnap, pSnap, rSnap] = await Promise.all([
       tx.get(aRef), tx.get(sRef), tx.get(pRef), tx.get(rRef),
     ]);
@@ -1501,7 +1502,7 @@ export interface BoardData {
   totalSessions: number;
 }
 
-export async function getBoardData(db: Firestore, clubId: string): Promise<BoardData> {
+export async function getBoardData(db: Db, clubId: string): Promise<BoardData> {
   const [playersSnap, ratingsSnap, pairsSnap, sessionsSnap] = await Promise.all([
     db.collection(`clubs/${clubId}/players`).get(),
     db.doc(`clubs/${clubId}/private/ratings`).get(),
@@ -1629,7 +1630,7 @@ export interface RebuildResult {
 }
 
 export async function rebuildClubState(
-  db: Firestore,
+  db: Db,
   clubId: string,
   opts: { excludeSessionIds?: Set<string>; dryRun?: boolean } = {},
 ): Promise<RebuildResult> {
@@ -1782,7 +1783,7 @@ export interface SessionSummary {
   firstTimePairNames: string[];
 }
 
-export async function getSessionSummary(db: Firestore, clubId: string, sessionId: string): Promise<SessionSummary> {
+export async function getSessionSummary(db: Db, clubId: string, sessionId: string): Promise<SessionSummary> {
   const sSnap = await db.doc(`sessions/${sessionId}`).get();
   const s = sSnap.data() as SessionDoc | undefined;
   if (!s) throw new Error(`session not found: ${sessionId}`);

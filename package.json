@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx tests/engine.test.ts",
+    "test:repo": "tsx tests/repo-mem.test.ts",
+    "test:rebuild": "tsx tests/rebuild.test.ts",
+    "test:safe": "npm test && npm run test:repo && npm run test:rebuild",
     "test:integration": "tsx tests/firestore-uc5.test.ts",
     "check:firebase": "tsx scripts/check-firebase.ts"
   },
