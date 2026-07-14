@@ -8,21 +8,31 @@ const H = 132;
 const ALLEY = 12;         // doubles sideline inset (top/bottom margin)
 const SERVICE_INSET = 56; // service line distance from the net
 
-function NameLines({ team, x, align }: { team: [string, string] | null; x: number; align: 'end' | 'start' }) {
+const FONT = 17;
+
+// Each name gets its half of the court, centred. Long names shrink to
+// fit (SVG textLength) instead of overflowing the boundary — so a
+// "Cuong Nguyen" compresses rather than spilling off the card.
+function fit(name: string, avail: number): { textLength?: number; lengthAdjust?: 'spacingAndGlyphs' } {
+  const est = name.length * FONT * 0.6; // rough width incl. the 110% stretch
+  return est > avail ? { textLength: avail, lengthAdjust: 'spacingAndGlyphs' } : {};
+}
+
+function NameLines({ team, x, avail }: { team: [string, string] | null; x: number; avail: number }) {
   if (!team) return null;
   return (
     <>
       <text
-        x={x} y={H / 2 - 6} textAnchor={align}
+        x={x} y={H / 2 - 6} textAnchor="middle" {...fit(team[0], avail)}
         className="fill-line-000 font-display"
-        style={{ fontSize: 20, fontWeight: 500, fontStretch: '110%' }}
+        style={{ fontSize: FONT, fontWeight: 500, fontStretch: '110%' }}
       >
         {team[0]}
       </text>
       <text
-        x={x} y={H / 2 + 18} textAnchor={align}
+        x={x} y={H / 2 + 18} textAnchor="middle" {...fit(team[1], avail)}
         className="fill-line-000 font-display"
-        style={{ fontSize: 20, fontWeight: 500, fontStretch: '110%' }}
+        style={{ fontSize: FONT, fontWeight: 500, fontStretch: '110%' }}
       >
         {team[1]}
       </text>
@@ -52,8 +62,8 @@ export function CourtDiagram({
       {/* the net */}
       <line x1={netX} y1={0} x2={netX} y2={H} className="stroke-line-700" strokeWidth={1.5} strokeDasharray="3 4" />
 
-      <NameLines team={teamA} x={netX - SERVICE_INSET - 10} align="end" />
-      <NameLines team={teamB} x={netX + SERVICE_INSET + 10} align="start" />
+      <NameLines team={teamA} x={W / 4} avail={W / 2 - 16} />
+      <NameLines team={teamB} x={(W * 3) / 4} avail={W / 2 - 16} />
     </svg>
   );
 }
