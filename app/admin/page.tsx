@@ -99,9 +99,13 @@ function nCr(n: number, r: number): number {
 // `playing` of `present` people to be on court; what's the chance all
 // `managers` of them land in that group?
 function riskNobodyFree(present: number, courts: number, managers: number): number {
-  const playing = courts * 4;
-  if (managers <= 0 || present <= 0 || managers > present) return managers > present ? 0 : 1;
-  return nCr(present - managers, playing - managers) / nCr(present, playing);
+  if (managers <= 0 || present <= 0) return 0;
+  if (managers > present) return 0;                // more code-holders than people present → can't all be on court
+  const playing = Math.min(courts * 4, present);   // can't have more people playing than are present
+  if (playing >= present) return 1;                // everyone present is on a court → nobody is ever free
+  if (managers > playing) return 0;                // can't fit every manager on court at once
+  const r = nCr(present - managers, playing - managers) / nCr(present, playing);
+  return Number.isFinite(r) ? Math.max(0, Math.min(1, r)) : 0;
 }
 
 // "Hand the manager code to 8 people, not 2" — see CLAUDE.md "ROLES".
@@ -119,8 +123,9 @@ function ManagerRiskCalculator() {
     : 22;
   const courts = session?.courtCount ?? 3;
 
+  const playing = Math.min(courts * 4, present);
   const risk = useMemo(() => riskNobodyFree(present, courts, managers), [present, courts, managers]);
-  const pct = (risk * 100).toFixed(risk * 100 < 1 ? 2 : 1);
+  const pct = (risk * 100).toFixed(risk * 100 < 1 && risk > 0 ? 2 : 0);
 
   return (
     <div className="rounded-xl border border-line-700 p-4">
@@ -140,11 +145,15 @@ function ManagerRiskCalculator() {
         <p className="text-[13px] text-line-400">people have the manager code</p>
       </div>
       <p className="mt-3 text-[13px] text-line-000">
-        With {present} people and {courts} court{courts === 1 ? '' : 's'} ({courts * 4} playing at once):
+        With {present} {present === 1 ? 'person' : 'people'} and {courts} court{courts === 1 ? '' : 's'} ({playing} playing at once):
         at any moment there&apos;s a <span className="font-medium">{pct}%</span> chance every manager is on
         court and nobody can record a result.
       </p>
-      <p className="mt-1 text-[13px] text-line-400">Aim for 6+.</p>
+      <p className="mt-1 text-[13px] text-line-400">
+        {playing >= present
+          ? 'Everyone here is on a court — with more people, aim for 6+ code-holders.'
+          : 'Aim for 6+.'}
+      </p>
     </div>
   );
 }
