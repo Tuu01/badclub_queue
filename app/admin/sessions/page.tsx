@@ -115,9 +115,24 @@ function AllSessionsPageInner() {
         {actor && <WhoAmI name={actor.name} short />}
         <Link href="/admin" className="text-[13px] text-line-400">← Back to admin</Link>
       </div>
-      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>All sessions</p>
+      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Sessions</p>
+
+      {/* New session — the create flow is a two-step wizard (date/courts,
+          then roster), so it lives on its own page; this is the entry. */}
+      <section className="rounded-xl border border-line-700 p-4">
+        <p className="text-[13px] font-medium text-line-000">New session</p>
+        <p className="mt-1 text-[13px] text-line-400">Set the play date, courts, and roster.</p>
+        <Link
+          href="/admin/session/new"
+          className={`mt-3 inline-flex h-12 items-center rounded-lg border border-line-000 bg-line-000 px-5 text-[15px] font-medium text-court-900 ${TAP}`}
+        >
+          New session →
+        </Link>
+      </section>
 
       {message && <p className="text-[13px] text-signal">{message}</p>}
+
+      <p className="text-[11px] font-medium text-line-400">ALL SESSIONS</p>
 
       {/* F-2 — the only discovery path to /board. Persists across list
           re-renders (the session flips LIVE→DONE via the same
