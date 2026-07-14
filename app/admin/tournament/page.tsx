@@ -12,6 +12,20 @@ const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
 interface TItem { id: string; name: string; date: string; status: string; teamsFinalized: boolean; imported: boolean; }
 
+// Same treatment as /admin/sessions' StatusLabel — a green-dot LIVE badge.
+function StatusLabel({ t }: { t: TItem }) {
+  if (t.status === 'LIVE') {
+    return (
+      <span className="flex items-center gap-1.5 text-live">
+        <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
+        LIVE
+      </span>
+    );
+  }
+  if (t.status === 'DONE') return <span className="text-line-700">DONE</span>;
+  return <span className="text-line-000">DRAFT</span>;
+}
+
 function Inner() {
   const router = useRouter();
   const actor = useActor();
@@ -102,14 +116,15 @@ function Inner() {
                 {list.map(t => (
                   <li key={t.id}>
                     <div className="flex items-center justify-between gap-2 px-4 py-3">
-                      <Link href={dest(t)} className={`min-w-0 flex-1 ${TAP}`}>
+                      <div className="min-w-0 flex-1">
                         <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>{t.name}</span>
                         <span className="block text-[13px] text-line-400">{t.date}{t.imported ? ' · imported' : ''}</span>
-                      </Link>
+                      </div>
                       <div className="flex shrink-0 items-center gap-3 text-[13px] font-medium">
-                        <span className="text-line-400">
-                          {t.status === 'DONE' ? 'done' : t.teamsFinalized ? 'live →' : 'set up teams →'}
-                        </span>
+                        <StatusLabel t={t} />
+                        <Link href={dest(t)} className={`text-line-400 underline ${TAP}`}>
+                          {t.status === 'DONE' ? 'Standings' : t.teamsFinalized ? 'Open' : 'Set up'}
+                        </Link>
                         <button disabled={busy} onClick={() => { setDeleteId(t.id); setDeleteText(''); }} className={`text-signal disabled:opacity-40 ${TAP}`}>
                           Delete
                         </button>
