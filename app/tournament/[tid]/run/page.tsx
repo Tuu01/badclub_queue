@@ -76,7 +76,7 @@ function Inner({ tid }: { tid: string }) {
   }
 
   return (
-    <main className="mx-auto min-h-dvh max-w-5xl space-y-4 bg-court-900 p-4 text-line-000">
+    <main className="mx-auto min-h-dvh max-w-xl space-y-4 bg-court-900 p-4 text-line-000">
       <div className="flex items-center justify-between">
         {actor && <WhoAmI name={actor.name} short />}
         <div className="flex gap-3 text-[13px] text-line-400">
@@ -93,8 +93,9 @@ function Inner({ tid }: { tid: string }) {
       </div>
       {err && <p className="text-[13px] text-signal">{err}</p>}
 
-      {/* Court columns */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(t.courtCount, 3)}, minmax(0,1fr))` }}>
+      {/* Courts — full-width, stacked one per row (like the session
+          screen), so the diagram is big and readable on a phone. */}
+      <div className="space-y-3">
         {Array.from({ length: t.courtCount }, (_, c) => {
           const ongoing = games.find(g => g.courtIdx === c && g.status === 'ONGOING');
           const queue = games.filter(g => g.courtIdx === c && g.status === 'SCHEDULED').sort((a, b) => a.id.localeCompare(b.id));
