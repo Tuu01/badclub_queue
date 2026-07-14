@@ -83,8 +83,12 @@ export interface SessionDoc {
    * DONE  → no UI transition to this yet (out of scope for this pass —
    *         a LIVE session with no "end session" action stays LIVE
    *         forever until something explicitly moves it along).
+   * VOID  → excluded from ALL stats: rebuildClubState skips it, and it
+   *         never counts toward attendance/snapshots on the boards. This
+   *         is how a test / verification session is retired without
+   *         deleting its games. See rebuildClubState().
    */
-  status: 'DRAFT' | 'LIVE' | 'DONE';
+  status: 'DRAFT' | 'LIVE' | 'DONE' | 'VOID';
 
   /** Copy of the ~22 people. Deliberately denormalized. */
   players: Record<PlayerId, SessionPlayer>;
@@ -1515,11 +1519,12 @@ export async function getBoardData(db: Firestore, clubId: string): Promise<Board
   const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
   const pairs = (pairsSnap.data() as PairStatsDoc | undefined)?.pairs ?? {};
 
-  // DRAFT sessions haven't happened yet — don't count toward attendance.
+  // DRAFT sessions haven't happened yet; VOID sessions are retired
+  // test/verification runs — neither counts toward attendance/snapshots.
   // Date-string ids ("2026-07-18") sort chronologically as plain strings.
   const sessions = sessionsSnap.docs
     .map(d => d.data() as SessionDoc)
-    .filter(s => s.status !== 'DRAFT')
+    .filter(s => s.status !== 'DRAFT' && s.status !== 'VOID')
     .sort((a, b) => a.id.localeCompare(b.id));
 
   const totalSessions = sessions.length;
@@ -1582,6 +1587,176 @@ export async function getBoardData(db: Firestore, clubId: string): Promise<Board
     totalActiveMembers: boardMembers.length,
     snapshotsCount,
     totalSessions,
+  };
+}
+
+// ============================================================
+// rebuildClubState — recompute mu/sigma/gamesTotal/pairStats from
+// scratch by replaying every non-VOID SESSION's games in play order.
+//
+// ⛔ STRUCTURAL SEPARATION — sessions measure SKILL, tournaments measure
+// GLORY, and the two must NEVER mix. This function reads the `sessions`
+// collection and NOTHING ELSE. There is no code path here that can
+// reach `tournaments/*` — tournament games live in a physically
+// separate top-level collection, so a query over `sessions` literally
+// cannot return them (the same trick that keeps guests off the boards:
+// guests aren't in clubs/players, so getBoardData can't see them).
+// Do NOT add a tournaments read here. Tournament results must never
+// touch mu · sigma · gamesTotal · pairStats · coPresent.
+//
+// Order: sessions are replayed by their id (the PLAY DATE — the real
+// club chronology), NOT by startedAt (which here is the row's creation
+// timestamp, unreliable). Within a session, games replay by startedAt.
+// Since only one club night runs at a time, this equals global
+// game-startedAt order for real data, but is robust to bad timestamps.
+//
+// Idempotent + deterministic: it always recomputes from the same
+// inputs, so a wrong exclude list is fixed by re-running with the right
+// one — nothing is destroyed (VOID keeps the games, just skips them).
+// ============================================================
+
+export interface RebuildResult {
+  ratings: Record<PlayerId, { mu: number; sigma: number }>;
+  pairs: PairStats;
+  gamesTotal: Record<PlayerId, number>;
+  lastPlayedAt: Record<PlayerId, number | null>;
+  seedMu: Record<PlayerId, number>;
+  replayedSessions: string[];
+  excludedSessions: string[];
+  replayedGames: number;
+  warnings: string[];
+  dryRun: boolean;
+}
+
+export async function rebuildClubState(
+  db: Firestore,
+  clubId: string,
+  opts: { excludeSessionIds?: Set<string>; dryRun?: boolean } = {},
+): Promise<RebuildResult> {
+  const dryRun = opts.dryRun ?? true; // SAFE DEFAULT: never write unless told
+  const exclude = opts.excludeSessionIds ?? new Set<string>();
+  const warnings: string[] = [];
+
+  // --- 1. players + seed every rating back to its SEED (seedMu) ---
+  const playersSnap = await db.collection(`clubs/${clubId}/players`).get();
+  const players = playersSnap.docs
+    .map(d => d.data() as PublicPlayerDoc)
+    .filter(p => !p.isGuest);
+  const divSize: Record<1 | 2, number> = { 1: 0, 2: 0 };
+  for (const p of players) divSize[p.div]++;
+
+  const ratings: Record<PlayerId, { mu: number; sigma: number }> = {};
+  const seedMuMap: Record<PlayerId, number> = {};
+  const gamesTotal: Record<PlayerId, number> = {};
+  const lastPlayedAt: Record<PlayerId, number | null> = {};
+  for (const p of players) {
+    const smu = seedMu(p.div, p.seedRank, divSize[p.div]);
+    seedMuMap[p.id] = smu;
+    ratings[p.id] = { mu: smu, sigma: SIGMA_INIT };
+    gamesTotal[p.id] = 0;
+    lastPlayedAt[p.id] = null;
+  }
+
+  // --- 2. wipe pairStats (rebuilt from replay below) ---
+  const pairs: PairStats = {};
+  const bumpPair = (a: PlayerId, b: PlayerId, f: 'partnered' | 'opposed' | 'coPresent') => {
+    const k = pairKey(a, b);
+    const cur = pairs[k] ?? { partnered: 0, opposed: 0, coPresent: 0 };
+    pairs[k] = { ...cur, [f]: cur[f] + 1 };
+  };
+
+  // --- 3. every non-VOID session, in PLAY-DATE order (id) ---
+  const sessionsSnap = await db.collection('sessions').get();
+  const sessions = sessionsSnap.docs
+    .map(d => ({ id: d.id, data: d.data() as SessionDoc }))
+    .filter(s => s.data.status !== 'DRAFT' && s.data.status !== 'VOID' && !exclude.has(s.id))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const replayedSessions: string[] = [];
+  let replayedGames = 0;
+
+  const isGuestId = (id: PlayerId) => id.startsWith('guest-');
+  // Rating source for a player IN A GAME: a member reads its running
+  // rating; a guest reads the seeded rating denormalized into that
+  // session doc (guest ids are single-use — never tracked across
+  // sessions), matching recordResult's asClub().
+  const ratingSource = (id: PlayerId, sp: SessionDoc['players']): { mu: number; sigma: number } | null => {
+    if (!isGuestId(id) && ratings[id]) return ratings[id];
+    const p = sp[id];
+    if (p) return { mu: p.mu, sigma: p.sigma };
+    return null;
+  };
+  const asCP = (id: PlayerId, r: { mu: number; sigma: number }): ClubPlayer =>
+    ({ id, mu: r.mu, sigma: r.sigma, seedRank: 0, gamesTotal: 0,
+       lastPlayedAt: null, isGuest: isGuestId(id), active: true } as ClubPlayer);
+
+  for (const { id: sid, data: s } of sessions) {
+    // --- 4a. bumpCoAttendance ONCE per session, over the non-guest roster ---
+    const roster = Object.keys(s.players ?? {}).filter(id => !isGuestId(id)).sort();
+    for (let i = 0; i < roster.length; i++) {
+      for (let j = i + 1; j < roster.length; j++) bumpPair(roster[i], roster[j], 'coPresent');
+    }
+
+    // --- 4b. replay this session's real games, in startedAt order ---
+    const gamesSnap = await db.collection(`sessions/${sid}/games`).get();
+    const games = gamesSnap.docs
+      .map(d => d.data() as Game)
+      .filter(g => g.status !== 'VOID' && g.winner != null)
+      .sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+
+    for (const g of games) {
+      const [a1, a2] = g.teamA;
+      const [b1, b2] = g.teamB;
+      const four = [a1, a2, b1, b2];
+      const src = four.map(id => ratingSource(id, s.players ?? {}));
+      if (src.some(r => r === null)) {
+        warnings.push(`session ${sid}: game skipped — unknown player among ${four.join(', ')}`);
+        continue;
+      }
+      const updates = updateRatings(
+        [asCP(a1, src[0]!), asCP(a2, src[1]!)],
+        [asCP(b1, src[2]!), asCP(b2, src[3]!)],
+        g.winner as 'A' | 'B',
+      );
+      const when = g.endedAt ?? g.startedAt ?? s.startedAt ?? null;
+      for (const u of updates) {
+        if (isGuestId(u.playerId)) continue; // guests never persist
+        ratings[u.playerId] = { mu: u.mu, sigma: u.sigma };
+        gamesTotal[u.playerId] = (gamesTotal[u.playerId] ?? 0) + 1;
+        lastPlayedAt[u.playerId] = when;
+      }
+      // pairStats — NO DECAY, matches recordResult (all 6 pairs bumped).
+      bumpPair(a1, a2, 'partnered');
+      bumpPair(b1, b2, 'partnered');
+      for (const x of [a1, a2]) for (const y of [b1, b2]) bumpPair(x, y, 'opposed');
+      replayedGames++;
+    }
+    replayedSessions.push(sid);
+  }
+
+  // --- 5. write back (unless dry run) ---
+  if (!dryRun) {
+    const now = Date.now();
+    await db.doc(`clubs/${clubId}/private/ratings`).set({ ratings, updatedAt: now });
+    await db.doc(`clubs/${clubId}/meta/pairStats`).set({ pairs, updatedAt: now });
+    // per-player gamesTotal + lastPlayedAt (chunked well under the 500 limit)
+    let batch = db.batch();
+    let n = 0;
+    for (const p of players) {
+      batch.update(db.doc(`clubs/${clubId}/players/${p.id}`), {
+        gamesTotal: gamesTotal[p.id] ?? 0,
+        lastPlayedAt: lastPlayedAt[p.id] ?? null,
+      });
+      if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); }
+    }
+    if (n % 400 !== 0) await batch.commit();
+  }
+
+  return {
+    ratings, pairs, gamesTotal, lastPlayedAt, seedMu: seedMuMap,
+    replayedSessions,
+    excludedSessions: sessionsSnap.docs.map(d => d.id).filter(id => exclude.has(id)),
+    replayedGames, warnings, dryRun,
   };
 }
 
