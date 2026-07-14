@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import {
-  getTournamentView, saveTeams, finalizeTeams, addSubstitution,
+  getTournamentView, saveTeams, finalizeTeams, endTournament, addSubstitution,
   scheduleGame, startClock, recordTournamentResult, undoTournamentResult,
 } from '@/lib/tournament';
 import type { PublicPlayerDoc } from '@/lib/firestore';
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tid
   const { tid } = await params;
   const body = await req.json().catch(() => null);
   const action = body?.action as string | undefined;
-  const ADMIN = ['saveTeams', 'finalize', 'schedule'];
+  const ADMIN = ['saveTeams', 'finalize', 'schedule', 'end'];
   const roleErr = requireRole(req, ADMIN.includes(action ?? '') ? 'ADMIN' : 'MANAGER');
   if (roleErr) return roleErr;
 
@@ -43,6 +43,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tid
         return NextResponse.json({ ok: true });
       case 'finalize':
         await finalizeTeams(adminDb, tid);
+        return NextResponse.json({ ok: true });
+      case 'end':
+        await endTournament(adminDb, tid);
         return NextResponse.json({ ok: true });
       case 'substitute':
         await addSubstitution(adminDb, tid, body.teamId, { out: body.out, in: body.in });
