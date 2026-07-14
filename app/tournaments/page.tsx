@@ -41,8 +41,15 @@ export default function TournamentsPage() {
                   <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>🏆 {t.name}</span>
                   <span className="block text-[13px] text-line-400">{t.date}{t.imported ? ' · imported' : ''}</span>
                 </span>
-                <span className="shrink-0 text-[13px] text-line-400">
-                  {t.status === 'LIVE' ? 'live' : t.status === 'DONE' ? 'results →' : 'upcoming'}
+                <span className="shrink-0 text-[13px] font-medium">
+                  {t.status === 'LIVE' ? (
+                    <span className="flex items-center gap-1.5 text-live">
+                      <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
+                      LIVE
+                    </span>
+                  ) : (
+                    <span className="text-line-400">{t.status === 'DONE' ? 'results →' : 'upcoming'}</span>
+                  )}
                 </span>
               </Link>
             </li>
