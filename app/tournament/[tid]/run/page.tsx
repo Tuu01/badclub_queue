@@ -9,6 +9,7 @@ import type { TournamentView } from '@/lib/tournament';
 import type { TournamentGame } from '@/lib/tournament-types';
 import { WhoAmI } from '../../../shared-ui';
 import { AdminGate } from '../../../admin/admin-gate';
+import { CourtDiagram } from '../../../CourtDiagram';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 type View = TournamentView & { names: Record<string, string> };
@@ -64,8 +65,9 @@ function Inner({ tid }: { tid: string }) {
   const { tournament: t, games, names } = view;
   const nm = (id: string) => names[id] ?? id;
   const teamName = (id: string) => t.teams.find(x => x.id === id)?.name ?? id;
-  const pairNames = (g: TournamentGame, side: 'A' | 'B') =>
-    (side === 'A' ? [g.playerIds[0], g.playerIds[1]] : [g.playerIds[2], g.playerIds[3]]).map(nm).join(' & ');
+  const pairArr = (g: TournamentGame, side: 'A' | 'B'): [string, string] =>
+    (side === 'A' ? [nm(g.playerIds[0]), nm(g.playerIds[1])] : [nm(g.playerIds[2]), nm(g.playerIds[3])]) as [string, string];
+  const pairNames = (g: TournamentGame, side: 'A' | 'B') => pairArr(g, side).join(' & ');
   const undoSecs = last ? Math.max(0, Math.ceil((60_000 - (now - last.at)) / 1000)) : 0;
 
   async function record(g: TournamentGame, winner: 'A' | 'B') {
@@ -101,11 +103,7 @@ function Inner({ tid }: { tid: string }) {
               <p className="text-[11px] font-medium text-line-400">COURT {c + 1}</p>
               {ongoing ? (
                 <div className="mt-2 space-y-2">
-                  <div className="text-[15px]">
-                    <p className="font-medium">{pairNames(ongoing, 'A')}</p>
-                    <p className="text-[11px] text-line-700">vs</p>
-                    <p className="font-medium">{pairNames(ongoing, 'B')}</p>
-                  </div>
+                  <CourtDiagram teamA={pairArr(ongoing, 'A')} teamB={pairArr(ongoing, 'B')} />
                   {ongoing.startedAt == null ? (
                     <button disabled={busy} onClick={() => act({ action: 'start', gid: ongoing.id })}
                       className={`min-h-[44px] w-full rounded-lg border border-line-000 bg-line-000 text-[14px] font-medium text-court-900 ${TAP}`}>
