@@ -62,6 +62,20 @@ export default function HomePage() {
 
   const [busy, setBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [liveTournament, setLiveTournament] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/tournaments')
+      .then(r => r.json())
+      .then(b => {
+        if (cancelled) return;
+        const live = (b.tournaments ?? []).find((t: { status: string }) => t.status === 'LIVE');
+        setLiveTournament(live ? { id: live.id, name: live.name } : null);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const activeRoster = players
     .filter(p => p.active)
@@ -144,6 +158,23 @@ export default function HomePage() {
           <p className="text-line-400">No session yet.</p>
         )}
       </section>
+
+      {/* Live tournament — same treatment as a live session. Admin lands
+          on the run screen; everyone else on the standings/live view. */}
+      {liveTournament && (
+        <section className="mt-4 flex flex-col items-center gap-2 text-center">
+          <p className="flex items-center gap-1.5 text-[13px] text-live">
+            <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
+            🏆 Tournament is live · {liveTournament.name}
+          </p>
+          <Link
+            href={role === 'ADMIN' ? `/tournament/${liveTournament.id}/run` : `/tournament/${liveTournament.id}`}
+            className={`mt-1 flex min-h-[56px] w-full max-w-xs items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
+          >
+            Go to tournament
+          </Link>
+        </section>
+      )}
 
       <div className="mx-auto my-6 max-w-xs border-t border-line-700" />
 
