@@ -125,11 +125,17 @@ export const DEFAULT_CONFIG: MatchmakingConfig = {
   windowSize: 8,
   wRepeatPartner: 48,
   wRepeatOpponent: 12,
-  wBalance: 36,
+  // BALANCE-FIRST (owner decision — even matches, not one-way games).
+  // Balance is now always on (see matchmaking.ts) and weighted to LEAD
+  // mixing: at 300, an uneven split is penalised more than a repeated
+  // pairing, so the app picks the fairest four+split and uses mixing only
+  // to break ties among similarly-even options. Was 36 (and gated off
+  // until convergence) when mixing was the priority.
+  wBalance: 300,
   wWait: 0.30,
   starvationMinutes: 25,
   penaltyAllWomen: 100,
-  balanceSigmaThreshold: 6.0,
+  balanceSigmaThreshold: 6.0, // legacy/unused — balance no longer gated on sigma
   topN: 3,
 };
 

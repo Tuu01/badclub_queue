@@ -208,8 +208,6 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
     // Don't stack all 4 women onto one court (WD is nearly impossible with 3-5 women/22 people)
     const allWomen = ps.every(p => p.gender === 'F');
 
-    const useBalance = canShowPrediction(ps);
-
     for (const [tA, tB] of splits(four4)) {
       const rp = repetition(pairStats, tA[0], tA[1], 'partnered')
                + repetition(pairStats, tB[0], tB[1], 'partnered');
@@ -221,10 +219,15 @@ export function suggestMatch(input: MatchmakingInput): Suggestion | null {
       const rb = teamRating(players.get(tB[0])!, players.get(tB[1])!);
       const probA = winProbability(ra, rb);
 
-      // W_BALANCE = 0 when rating hasn't converged yet.
-      // Not because balance doesn't matter — but because at that
-      // point P(win) is always ≈ 0.5 and COMPLETELY MEANINGLESS.
-      const imb = useBalance ? Math.abs(probA - 0.5) : 0;
+      // BALANCE IS THE PRIMARY OBJECTIVE (owner decision — the club wants
+      // even matches, not one-way games). It's ALWAYS on now, not gated on
+      // convergence: once the admin has ranked players, the seed rating is
+      // a real skill signal so P(win) is meaningful immediately. When
+      // players are still unranked/bunched, P(win) ≈ 0.5 so this term
+      // naturally does nothing — no harm. Mixing (rp/ro) is now secondary,
+      // breaking ties among similarly-balanced splits. See wBalance in
+      // DEFAULT_CONFIG for the weight that makes balance lead.
+      const imb = Math.abs(probA - 0.5);
 
       // Wildcard: if this pair was requested → a large bonus
       const wild = (wildSet.has(pairKey(tA[0], tA[1])) ? 1 : 0)
