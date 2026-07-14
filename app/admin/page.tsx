@@ -3,11 +3,76 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useActiveSession } from '@/lib/use-active-session';
+import { writeFetch } from '@/lib/client-code';
 import { useActor } from '@/lib/client-identity';
 import { WhoAmI } from '../shared-ui';
 import { AdminGate } from './admin-gate';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
+
+// "Recalculate everything" — replays every non-VOID session from seed.
+// Idempotent, so safe to run any time. This is the escape hatch for
+// UC-2 (VOID a game someone says they didn't play) and for changing the
+// rating maths later: fix the formula, press this, all history recomputes.
+function RecalculateCard() {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function run() {
+    if (busy) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await writeFetch('/api/admin/recalculate', { method: 'POST' });
+      const body = await res.json().catch(() => null);
+      if (res.ok) {
+        setResult(`Recomputed ${body.replayedGames} games across ${body.replayedSessions} sessions.` +
+          (body.warnings?.length ? ` ⚠ ${body.warnings.length} warning(s).` : ''));
+        setConfirming(false);
+      } else {
+        setResult(`Error: ${body?.error ?? res.status}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-line-700 p-4">
+      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Recalculate everything</p>
+      <p className="mt-1 text-[13px] text-line-400">
+        Replays every non-VOID session from each player&apos;s seed and rewrites all ratings and pair
+        history. Use after VOIDing a session, or after a rating-formula change. Safe to run any time.
+      </p>
+      {!confirming ? (
+        <button
+          onClick={() => { setConfirming(true); setResult(null); }}
+          className={`mt-3 min-h-[44px] rounded-lg border border-line-700 px-4 text-[14px] font-medium text-line-000 ${TAP}`}
+        >
+          Recalculate everything
+        </button>
+      ) : (
+        <div className="mt-3 flex gap-2">
+          <button
+            disabled={busy}
+            onClick={run}
+            className={`min-h-[44px] flex-1 rounded-lg border border-line-000 bg-line-000 text-[14px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
+          >
+            {busy ? 'Recomputing…' : 'Yes, recompute all history'}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className={`min-h-[44px] rounded-lg border border-line-700 px-4 text-[14px] font-medium text-line-400 ${TAP}`}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {result && <p className="mt-3 text-[13px] text-line-000">{result}</p>}
+    </div>
+  );
+}
 
 function Card({ href, title, subtitle }: { href: string; title: string; subtitle: string }) {
   return (
@@ -109,6 +174,7 @@ export default function AdminHubPage() {
         )}
 
         <ManagerRiskCalculator />
+        <RecalculateCard />
       </main>
     </AdminGate>
   );
