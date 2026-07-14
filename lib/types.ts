@@ -111,8 +111,14 @@ export interface MatchmakingConfig {
   /** Waiting more than this many MINUTES → MUST be included in the next game. */
   starvationMinutes: number;
 
-  /** Don't stack all 4 women onto one court. */
-  penaltyAllWomen: number;
+  /**
+   * Keep matches in proper badminton categories. Penalty PER UNIT of gender
+   * imbalance between the two teams: |womenA − womenB|. So Men's (2M v 2M),
+   * Women's (2W v 2W) and Mixed (1M+1W v 1M+1W) all score 0; a team-with-a-woman
+   * vs an all-men team scores 1×; 2W-vs-2M scores 2×. Soft, not a hard gate:
+   * a starving player can still be force-included in a mismatched four.
+   */
+  wGenderMismatch: number;
 
   /** Only use W_BALANCE when all 4 people have sigma below this threshold. */
   balanceSigmaThreshold: number;
@@ -134,7 +140,7 @@ export const DEFAULT_CONFIG: MatchmakingConfig = {
   wBalance: 300,
   wWait: 0.30,
   starvationMinutes: 25,
-  penaltyAllWomen: 100,
+  wGenderMismatch: 150, // per unit of |womenA − womenB|; confirmed by sim sweep
   balanceSigmaThreshold: 6.0, // legacy/unused — balance no longer gated on sigma
   topN: 3,
 };
