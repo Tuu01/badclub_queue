@@ -47,8 +47,10 @@ export default function TournamentsPage() {
                       <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
                       LIVE
                     </span>
+                  ) : t.status === 'DONE' ? (
+                    <span className="text-line-700">DONE</span>
                   ) : (
-                    <span className="text-line-400">{t.status === 'DONE' ? 'results →' : 'upcoming'}</span>
+                    <span className="text-line-400">upcoming</span>
                   )}
                 </span>
               </Link>
