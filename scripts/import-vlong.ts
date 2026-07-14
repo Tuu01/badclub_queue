@@ -56,24 +56,28 @@ async function main() {
   if (!confirmed) { console.log('\nDRY RUN — nothing written. Re-run with --confirm.'); process.exit(0); }
 
   // ---- VERIFY STRUCTURAL SEPARATION on the real DB ----
+  // The invariant: no tournament game ran through the rating engine. The
+  // proof is that NOTHING a game would touch moved — sigma is still at
+  // its initial value (a game decays it), gamesTotal is 0 (a game bumps
+  // it), and pairStats was never created (a game bumps it). We do NOT
+  // check mu against a recomputed seed: createPlayer seeds each new
+  // player at the bottom of the division AS IT GROWS, so a freshly
+  // bulk-created, not-yet-ranked roster legitimately sits at seed-bottom
+  // (div1 {72,55}, div2 {52,32}) until the admin ranks it. That's a valid
+  // seed state, not a rating the tournament moved.
   const players = (await db.collection(`clubs/${CLUB_ID}/players`).get()).docs.map(d => d.data() as any).filter(p => !p.isGuest);
   const ratings = ((await db.doc(`clubs/${CLUB_ID}/private/ratings`).get()).data() as any)?.ratings ?? {};
-  const { seedMu, SIGMA_INIT } = await import('../lib/rating');
-  const sigmas = Object.values(ratings).map((r: any) => r.sigma);
+  const { SIGMA_INIT } = await import('../lib/rating');
+  const sigmas: number[] = Object.values(ratings).map((r: any) => r.sigma);
   const sumGT = players.reduce((s, p) => s + (p.gamesTotal ?? 0), 0);
-  const offSeed = players.filter(p => {
-    const divSize = players.filter(q => q.div === p.div).length;
-    return Math.abs(ratings[p.id].mu - seedMu(p.div, p.seedRank, divSize)) > 1e-9;
-  });
   const pairStatsExists = (await db.doc(`clubs/${CLUB_ID}/meta/pairStats`).get()).exists;
 
   console.log('\n════ SEPARATION CHECK (skill must be untouched) ════');
   console.log(`players created      : ${players.length}`);
-  console.log(`σ range              : ${Math.min(...sigmas as number[])}–${Math.max(...sigmas as number[])} (expect 8–8)`);
-  console.log(`Σ gamesTotal         : ${sumGT} (expect 0)`);
-  console.log(`players off seed mu  : ${offSeed.length} (expect 0)`);
-  console.log(`pairStats doc exists : ${pairStatsExists} (expect false)`);
-  const clean = sumGT === 0 && offSeed.length === 0 && !pairStatsExists && sigmas.every(s => s === SIGMA_INIT);
+  console.log(`σ all === ${SIGMA_INIT}          : ${sigmas.every(s => s === SIGMA_INIT)} (a game would decay it)`);
+  console.log(`Σ gamesTotal === 0   : ${sumGT === 0} (a game would bump it)`);
+  console.log(`pairStats absent     : ${!pairStatsExists} (a game would create it)`);
+  const clean = sumGT === 0 && !pairStatsExists && sigmas.every(s => s === SIGMA_INIT);
   console.log(clean ? '\n✓ IMPORTED. Skill untouched — tournament is quarantined.' : '\n✗ SEPARATION VIOLATED — investigate.');
   process.exit(clean ? 0 : 1);
 }
