@@ -121,9 +121,50 @@ Cost: ~10 seconds per match.
 
 ## SCREENS
 
-### `/` — the session (90% of the time is spent here)
+### `/` — the home screen, and `/session` — the live screen (separate routes)
 
-**Three questions, only three.** If answering one requires scrolling → the design is wrong.
+**STATUS 2026-07-14: split into two routes.** This used to say "the
+session (90% of the time is spent here)," then briefly became a single
+router that showed one or the other depending on session state. Now
+they're two separate URLs, on request — a home screen and a session
+screen, not one page pretending to be both. `/` never shows courts;
+`/session` never shows the mixing teaser.
+
+**`/` — THE APP'S REAL HOME SCREEN**, not an empty state (the app runs
+ONE HOUR A WEEK; it sleeps 167 hours, and this is where almost every
+open lands):
+```
+┌──────────────────────────────┐
+│      Badminton Queue         │
+│                               │
+│  ● Session is live           │  ← only if one is; links to /session
+│  [ Go to session ]           │
+│                               │
+│  ── or, a DRAFT exists: ──   │
+│  Next session                │
+│  Sat 19 Jul · 22 players     │
+│  [ Start session ]           │  ← MANAGER+ only; else "waiting
+│                               │     for a manager" + Enter code.
+│                               │     On success, jumps to /session.
+│  ── or, no DRAFT exists: ──  │
+│  No session yet              │
+│  ─────────────────────────   │
+│  🤝 You've played with       │  ← the discovery hook. See
+│     14 of 21 people          │    LEADERBOARD.md §0 — this
+│                               │    IS the retention channel.
+│  [ Leaderboard ]  [My stats] │  ← the ONLY discovery path to
+│                               │    /board and /me
+│  [ Admin ]                   │  ← ADMIN only, recessed
+└──────────────────────────────┘
+```
+If identity isn't known yet, an inline "Who are you?" strip replaces the
+mixing teaser — it never blocks the rest of the page.
+
+**`/session` — role MANAGER/ADMIN**, the full session screen. If no
+session is LIVE when this route is visited, it just says so ("No
+session right now" + a link back to `/`) — it doesn't try to be the
+home screen too. **Three questions, only three.** If answering one
+requires scrolling → the design is wrong.
 
 1. *"When do I play?"* — 10 people are waiting
 2. *"Who am I playing with, which court?"*
@@ -153,14 +194,49 @@ Cost: ~10 seconds per match.
 │  2 Ha      17 min · 1 game   │
 │  3 You     14 min · 2 games  │  ← highlighted
 ├──────────────────────────────┤
-│  Pause me  ·  Manual teams   │  ← recessed, at the foot
+│  Pause me · Manual teams ·   │  ← recessed, at the foot
+│  End session · Check people  │     (+Admin, ADMIN only)
+│  in                          │
 └──────────────────────────────┘
 ```
 
-**No nav bar. No tabs. No hamburger. ONE screen.**
+**No nav bar. No tabs. No hamburger.** This view is a destination — you're
+standing on a court. The footer links are functional actions, not chrome
+— deliberately no "← Home" here either, same reasoning.
 
-### `/checkin` — admin, one write
+**`/session`, role PLAYER (no code)** — the SAME screen, read-only:
+courts, queue, and the "you're 3rd · 11 min" hero all render exactly as
+above. What's missing: no record buttons, no mode switch (a plain "Mode:
+Assign" readout instead), no check-in link, no End session. Pausing/
+marking someone LEFT stays available — tap ANYONE's row in the queue,
+no code needed; see CLAUDE.md "ROLES" for why that one is deliberately
+open regardless of role. The footer becomes `[My stats] [Leaderboard]
+[Enter code]` — a different context (a sofa on Tuesday vs. a court on
+Saturday) gets different navigation, and this footer's job is
+discovery, not control.
+
+`End session` is MANAGER-reachable here (not just ADMIN via
+`/admin/sessions`, same endpoint) — the person actually running
+tonight's session shouldn't need the admin code to close it out.
+
+### `/board` and `/me` — no code needed
+
+The leaderboard (four tabs, Mixing default) and the personal stats page.
+Discovered ONLY from the home screen above (and the post-session summary,
+F-2) — never linked from the live session screen, so nobody's checking
+their rank while standing on a court. See LEADERBOARD.md.
+
+### `/checkin` — MANAGER+, one write, reached from `/session` when a session is live
 Shows only the ~22 people on the roster + a button for "add someone not on the list" + "add guest."
+
+### `/admin` and `/admin/*` — ADMIN only
+
+Hub with three cards: new session, players, all sessions. **"Match
+history" is NOT one of them — it doesn't exist yet.** `/admin/sessions`
+lists SESSIONS (date, status, headcount); match history would be a list
+of GAMES — what an admin opens when someone says "the app says I played
+that match and I didn't" (a real conversation UC-1's mid-match swap will
+eventually cause). Not a blocker, not built, don't assume it's there.
 
 ### `/admin/session/new` — Setup, 2 steps
 
@@ -206,12 +282,16 @@ The **"Swap"** button must be **always visible, never buried in a menu**. The pa
 
 Last verified against the actual codebase 2026-07-13 — this list was stale
 for a while (only 7 of the 14 routes below were ever documented; the rest
-were built later and never backfilled here).
+were built later and never backfilled here). /score added same day (UC-21).
 
 ```
 POST   /api/session/:id/checkin  { playerIds: string[] }        → checkInBatch()
 POST   /api/session/:id/result   { gameId, courtIdx, winner: 'A'|'B'|null,
                                     scoreLoser?, actor }         → recordResult()
+POST   /api/session/:id/score    { gameId, scoreLoser: 0-29 }    → setGameScore()
+                                                                    (UC-21 — patches an
+                                                                     ALREADY-recorded game;
+                                                                     never re-triggers rating)
 POST   /api/session/:id/assign   { courtIdx, four, teamA, teamB, accepted,
                                     suggested?, reason?, assignedByApp, actor }
                                                                  → assignCourt()

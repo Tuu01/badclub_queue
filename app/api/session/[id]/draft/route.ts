@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { setDraftRoster, deleteDraftSession, NotDraftError } from '@/lib/firestore';
-import { hasValidCode } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { CLUB_ID } from '@/lib/constants';
 
 // Edit a DRAFT's roster/court count in place. Refuses (409) if the
 // session has already gone LIVE — see lib/firestore.ts#setDraftRoster.
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
-  }
+  const roleErr = requireRole(req, 'ADMIN');
+  if (roleErr) return roleErr;
 
   const { id } = await params;
   const body = await req.json().catch(() => null);
@@ -33,9 +32,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 // the document id, so there's no rename; delete the wrong one, create
 // a fresh one at the correct date).
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
-  }
+  const roleErr = requireRole(req, 'ADMIN');
+  if (roleErr) return roleErr;
 
   const { id } = await params;
   try {

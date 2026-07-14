@@ -30,7 +30,8 @@ import type {
 } from './types';
 import { pairKey, DEFAULT_CONFIG } from './types';
 import { suggestMatch } from './matchmaking';
-import { updateRatings, seedMu, SIGMA_INIT } from './rating';
+import { updateRatings, seedMu, SIGMA_INIT, isConverged } from './rating';
+import { computeSkillBand, type SkillBand } from './skill-band';
 
 import {
   getFirestore, Timestamp, type Transaction, type Firestore,
@@ -123,6 +124,19 @@ export interface SessionDoc {
     at: number;
     ratings: Array<{ id: PlayerId; mu: number; sigma: number; gamesTotal: number }>;
   };
+
+  /**
+   * Accumulated by recordResult() — pairKey() strings ("a|b", sorted)
+   * for pairs whose FIRST-EVER partnering happened in this session
+   * (partnered was 0 the moment before the bump). Feeds F-2's
+   * "first-time pairs" line; nothing else reads it. Guests excluded.
+   * See recordResult()'s notePartnerIfFirst.
+   *
+   * STRINGS, not [PlayerId, PlayerId] tuples — Firestore rejects
+   * arrays-of-arrays ("Nested arrays are not allowed"). Learned this
+   * the hard way; don't change the shape back.
+   */
+  firstTimePairs?: string[];
 }
 
 /** Document clubs/{cid}/meta/pairStats. NO DECAY. Remembered forever. */
@@ -359,6 +373,21 @@ export async function recordResult(
       const cur = stats[k] ?? { partnered: 0, opposed: 0, coPresent: 0 };
       stats[k] = { ...cur, [f]: cur[f] + 1 };
     };
+    // F-2's "first-time pairs" line needs to know exactly which
+    // partnerings are brand new — the moment BEFORE bump() is the only
+    // place that's known for certain (partnered is a running total with
+    // no per-session breakdown). Guests excluded — see addGuest(),
+    // "guests never appear on any board" extends to this summary too.
+    const firstTimePairs = (s.firstTimePairs ?? []).slice();
+    const notePartnerIfFirst = (x: PlayerId, y: PlayerId) => {
+      if (x.startsWith('guest-') || y.startsWith('guest-')) return;
+      const k = pairKey(x, y);
+      if ((stats[k]?.partnered ?? 0) > 0) return;
+      if (firstTimePairs.includes(k)) return; // dedupe
+      firstTimePairs.push(k);
+    };
+    notePartnerIfFirst(a1, a2);
+    notePartnerIfFirst(b1, b2);
     bump(pairKey(a1, a2), 'partnered');
     bump(pairKey(b1, b2), 'partnered');
     for (const x of [a1, a2]) for (const y of [b1, b2]) bump(pairKey(x, y), 'opposed');
@@ -384,9 +413,10 @@ export async function recordResult(
     tx.update(gRef, {
       winner: args.winner,
       scoreLoser: args.scoreLoser ?? null,
+      scoreWinner: null, // attached later via setGameScore() — see UC-21
       endedAt: now,
     });
-    tx.update(sRef, { players, attendance, courts });
+    tx.update(sRef, { players, attendance, courts, firstTimePairs });
     tx.set(pRef, { pairs: stats, updatedAt: now });
     tx.set(rRef, { ratings: clubRatings, updatedAt: now });
     for (let i = 0; i < memberIds.length; i++) {
@@ -404,6 +434,82 @@ export async function recordResult(
 
     return { alreadyRecorded: false, auditLogId: aRef.id };
   });
+}
+
+// ============================================================
+// UC-21 — the score field, attached AFTER the winner is already
+// recorded (see the undo bar in app/page.tsx). Deliberately a SECOND,
+// separate write: nothing here may touch rating/pairStats/attendance —
+// those were already applied the instant the winner was tapped.
+// Nothing reads scoreLoser today. Collected anyway, same reasoning as
+// the rating snapshot: it's the one thing you can't go back and get
+// later if you don't start collecting it from session one.
+// ============================================================
+
+/**
+ * Idempotent by construction: only ever patches ONE field. If the
+ * game has no winner yet (freed via "not sure who won," or doesn't
+ * exist), this is a silent no-op — there's nothing to attach a score
+ * to, and the UI that calls this can only ever appear after a real
+ * winner was recorded, so this is a defensive guard, not a real path.
+ */
+/**
+ * scoreWinner is deliberately NOT part of the `Game` type in lib/types.ts
+ * (protected — see CLAUDE.md) — same as scoreLoser, it's descriptive data
+ * the pure core (rating.ts/matchmaking.ts) never reads, so it's stored
+ * here in the "dirty shell" without touching that interface.
+ */
+export async function setGameScore(
+  db: Firestore,
+  sessionId: string,
+  gameId: string,
+  scores: { scoreWinner: number; scoreLoser: number },
+): Promise<{ ok: true }> {
+  const gRef = db.doc(`sessions/${sessionId}/games/${gameId}`);
+  await db.runTransaction(async (tx: Transaction) => {
+    const snap = await tx.get(gRef);
+    const g = snap.data() as Game | undefined;
+    if (!g || g.winner === null) return;
+    tx.update(gRef, { scoreWinner: scores.scoreWinner, scoreLoser: scores.scoreLoser });
+  });
+  return { ok: true };
+}
+
+/**
+ * PLAYER-tier — no code required (view-only, same as the live courts).
+ * Player names aren't resolved here: the client already has
+ * `session.players` from its own live session doc, and re-fetching
+ * this on every game means a fresh session's history is never stale.
+ * `scoreWinner` is read as an untyped extension for the same reason
+ * `setGameScore` writes it that way — see the note above.
+ */
+export interface GameHistoryEntry {
+  id: string;
+  courtIndex: number;
+  teamA: [PlayerId, PlayerId];
+  teamB: [PlayerId, PlayerId];
+  winner: 'A' | 'B' | null;
+  scoreWinner: number | null;
+  scoreLoser: number | null;
+  endedAt: number | null;
+}
+
+export async function getGameHistory(db: Firestore, sessionId: string): Promise<GameHistoryEntry[]> {
+  const gamesSnap = await db.collection(`sessions/${sessionId}/games`).get();
+  return gamesSnap.docs
+    .map(d => d.data() as Game & { scoreWinner: number | null })
+    .filter(g => g.status === 'OK' && g.winner !== null)
+    .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))
+    .map(g => ({
+      id: g.id,
+      courtIndex: g.courtIndex,
+      teamA: g.teamA,
+      teamB: g.teamB,
+      winner: g.winner,
+      scoreWinner: g.scoreWinner ?? null,
+      scoreLoser: g.scoreLoser,
+      endedAt: g.endedAt,
+    }));
 }
 
 // ============================================================
@@ -1105,6 +1211,33 @@ export async function deleteDraftSession(db: Firestore, sessionId: string): Prom
   });
 }
 
+/**
+ * Hard delete for ANY status (DRAFT/LIVE/DONE) — ADMIN-tier, "not
+ * undoable" per CLAUDE.md ROLES. Unlike deleteDraftSession this also
+ * removes the games/audit subcollections (a DRAFT never has any, but
+ * a LIVE/DONE session does — Firestore doesn't cascade-delete them).
+ *
+ * Deliberately does NOT touch clubs/{cid}/players or
+ * clubs/{cid}/private/ratings: any games already recorded here already
+ * updated those permanently. Deleting the session removes the record
+ * of the games, not their effect on ratings — reverting that would
+ * need the same rebuildClubState() this codebase doesn't have yet
+ * (see the DRAFT-only note above). That's a real, accepted consequence
+ * of "not undoable," not a bug.
+ */
+export async function deleteSession(db: Firestore, sessionId: string): Promise<void> {
+  const sRef = db.doc(`sessions/${sessionId}`);
+  const [gamesSnap, auditSnap] = await Promise.all([
+    db.collection(`sessions/${sessionId}/games`).get(),
+    db.collection(`sessions/${sessionId}/audit`).get(),
+  ]);
+  const batch = db.batch();
+  for (const d of gamesSnap.docs) batch.delete(d.ref);
+  for (const d of auditSnap.docs) batch.delete(d.ref);
+  batch.delete(sRef);
+  await batch.commit();
+}
+
 // ============================================================
 // MODE — OFF / RECORD / ASSIGN, changeable any time mid-session
 // ============================================================
@@ -1309,9 +1442,209 @@ export async function undoResult(
       const m = before.members[i];
       tx.update(memberRefs[i], { gamesTotal: m.gamesTotal, lastPlayedAt: m.lastPlayedAt });
     }
-    tx.update(gRef, { winner: null, endedAt: null });
+    // scoreLoser is part of the match, not a separate note — UC-21. If a
+    // score was saved (a SECOND write, after the winner) and then Undo
+    // is tapped, it must go with the rest of the result, not survive as
+    // an orphaned number attached to a game with no winner.
+    tx.update(gRef, { winner: null, endedAt: null, scoreLoser: null, scoreWinner: null });
     tx.update(aRef, { undoneAt: now });
 
     return { ok: true };
   });
+}
+
+// ============================================================
+// LEADERBOARD — read-only aggregation for /board + /me (#5)
+//
+// Mixing needs pairStats, Skill needs sigma — both live in server-only
+// docs (clubs/{cid}/meta/*, clubs/{cid}/private/*, see firestore.rules:
+// "allow read, write: if false"). The client can never read either
+// directly, so this is computed here and exposed through GET
+// /api/board. mu is NEVER returned: only sigma (an uncertainty number,
+// not a rating), gamesTotal, and a COARSE skill band derived from mu
+// server-side (Beginner/Intermediate/Advanced — a bucket, not the
+// number). The raw mu never leaves this function. See LEADERBOARD.md §5
+// (and its provisional-band decision note) and lib/skill-band.ts.
+// ============================================================
+
+/** "Attended N of the last M sessions" — M caps at this many, or fewer
+ * if the club hasn't played that many yet. */
+const ATTENDANCE_WINDOW = 16;
+
+export interface BoardMember {
+  id: PlayerId;
+  name: string;
+  mixing: { partners: number; possible: number; neverPartneredWith: string[] };
+  attendance: { attended: number; ofLast: number; streak: number };
+  skill: {
+    gamesTotal: number;
+    sigma: number;
+    converged: boolean;
+    // Coarse band derived from mu server-side — the number itself is
+    // never sent. null = not enough signal yet (< 3 games / no rating).
+    band: SkillBand | null;
+    provisional: boolean;
+    settling: boolean;
+    adjacentBand: SkillBand | null;
+  };
+}
+
+export interface BoardData {
+  members: BoardMember[];
+  groupSkillReady: number;
+  totalActiveMembers: number;
+  snapshotsCount: number;
+  totalSessions: number;
+}
+
+export async function getBoardData(db: Firestore, clubId: string): Promise<BoardData> {
+  const [playersSnap, ratingsSnap, pairsSnap, sessionsSnap] = await Promise.all([
+    db.collection(`clubs/${clubId}/players`).get(),
+    db.doc(`clubs/${clubId}/private/ratings`).get(),
+    db.doc(`clubs/${clubId}/meta/pairStats`).get(),
+    db.collection('sessions').get(),
+  ]);
+
+  // Guests are never written to clubs/{cid}/players (see addGuest —
+  // they only ever live inside a session doc), so they're already
+  // excluded here. "Guests never appear on any board."
+  const members = playersSnap.docs
+    .map(d => d.data() as PublicPlayerDoc)
+    .filter(p => p.active && !p.isGuest);
+
+  const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+  const pairs = (pairsSnap.data() as PairStatsDoc | undefined)?.pairs ?? {};
+
+  // DRAFT sessions haven't happened yet — don't count toward attendance.
+  // Date-string ids ("2026-07-18") sort chronologically as plain strings.
+  const sessions = sessionsSnap.docs
+    .map(d => d.data() as SessionDoc)
+    .filter(s => s.status !== 'DRAFT')
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const totalSessions = sessions.length;
+  const snapshotsCount = sessions.filter(s => !!s.ratingSnapshot).length;
+  const ofLast = Math.min(ATTENDANCE_WINDOW, totalSessions);
+  const windowSessions = sessions.slice(totalSessions - ofLast);
+
+  const boardMembers: BoardMember[] = members.map(p => {
+    const attended = windowSessions.filter(s => !!s.attendance[p.id]).length;
+
+    let streak = 0;
+    for (let i = sessions.length - 1; i >= 0; i--) {
+      if (sessions[i].attendance[p.id]) streak++;
+      else break;
+    }
+
+    // Denominator is coPresent (been at a planned session together),
+    // NOT every other member — otherwise a newcomer looks terrible for
+    // no reason. See LEADERBOARD.md §1 / the Mixing tab data note.
+    let partners = 0;
+    let possible = 0;
+    const neverPartneredWith: string[] = [];
+    for (const other of members) {
+      if (other.id === p.id) continue;
+      const stat = pairs[pairKey(p.id, other.id)];
+      if (!stat || stat.coPresent === 0) continue;
+      possible++;
+      if (stat.partnered > 0) partners++;
+      else neverPartneredWith.push(other.name);
+    }
+
+    // mu is read here ONLY to derive the coarse band — it is never put
+    // in the returned object. null when the player has no rating doc
+    // yet (0 games), which computeSkillBand treats as "no band".
+    const mu = ratings[p.id]?.mu ?? null;
+    const sigma = ratings[p.id]?.sigma ?? SIGMA_INIT;
+    const converged = isConverged({ sigma, gamesTotal: p.gamesTotal } as ClubPlayer);
+    const b = computeSkillBand(mu, sigma, p.gamesTotal);
+
+    return {
+      id: p.id,
+      name: p.name,
+      mixing: { partners, possible, neverPartneredWith },
+      attendance: { attended, ofLast, streak },
+      skill: {
+        gamesTotal: p.gamesTotal,
+        sigma,
+        converged,
+        band: b.band,
+        provisional: b.provisional,
+        settling: b.settling,
+        adjacentBand: b.adjacentBand,
+      },
+    };
+  });
+
+  return {
+    members: boardMembers,
+    groupSkillReady: boardMembers.filter(m => m.skill.converged).length,
+    totalActiveMembers: boardMembers.length,
+    snapshotsCount,
+    totalSessions,
+  };
+}
+
+// ============================================================
+// F-2 — post-session summary, pasted into the group chat
+//
+// The app sleeps six days a week; this message is the only thing
+// reminding the group it exists. Mixing leads (the project's actual
+// goal), no rating/score (six months out, see LEADERBOARD.md §5),
+// and /board is the only discovery path for the boards built above —
+// there is deliberately no link to either from `/`. See USECASES.md F-2.
+// ============================================================
+
+export interface SessionSummary {
+  date: string;
+  presentCount: number;
+  matchCount: number;
+  /** null when nobody present has any all-time partners yet (early weeks) — omit the line, don't crown a 0. */
+  mostMixed: { name: string; partners: number } | null;
+  /** null only if literally nobody present attended tonight, which can't happen — kept Nullable for symmetry with mostMixed. */
+  longestStreak: { name: string; streak: number } | null;
+  /** "A–B" formatted. Empty → the UI drops the line entirely, per the spec. */
+  firstTimePairNames: string[];
+}
+
+export async function getSessionSummary(db: Firestore, clubId: string, sessionId: string): Promise<SessionSummary> {
+  const sSnap = await db.doc(`sessions/${sessionId}`).get();
+  const s = sSnap.data() as SessionDoc | undefined;
+  if (!s) throw new Error(`session not found: ${sessionId}`);
+
+  const gamesSnap = await db.collection(`sessions/${sessionId}/games`).get();
+  const matchCount = gamesSnap.docs
+    .map(d => d.data() as Game)
+    .filter(g => g.status === 'OK' && g.endedAt !== null).length;
+
+  const presentCount = Object.keys(s.attendance).length;
+
+  // Reuses getBoardData() rather than recomputing mixing/streak from
+  // scratch — same numbers /board shows, one source of truth.
+  const board = await getBoardData(db, clubId);
+  const attendeeIds = new Set(Object.keys(s.attendance));
+  const candidates = board.members.filter(m => attendeeIds.has(m.id));
+
+  let mostMixed: SessionSummary['mostMixed'] = null;
+  for (const m of candidates) {
+    if (m.mixing.partners > 0 && (!mostMixed || m.mixing.partners > mostMixed.partners)) {
+      mostMixed = { name: m.name, partners: m.mixing.partners };
+    }
+  }
+
+  let longestStreak: SessionSummary['longestStreak'] = null;
+  for (const m of candidates) {
+    if (m.attendance.streak > 0 && (!longestStreak || m.attendance.streak > longestStreak.streak)) {
+      longestStreak = { name: m.name, streak: m.attendance.streak };
+    }
+  }
+
+  const firstTimePairNames = (s.firstTimePairs ?? []).map(k => {
+    const [a, b] = k.split('|');
+    const nameA = s.players[a]?.name ?? a;
+    const nameB = s.players[b]?.name ?? b;
+    return `${nameA}–${nameB}`;
+  });
+
+  return { date: s.date, presentCount, matchCount, mostMixed, longestStreak, firstTimePairNames };
 }

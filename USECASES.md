@@ -585,6 +585,12 @@ Don't block. Show the number. Let the group decide.
 
 ## UC-21 · When does the score field appear? 🟡
 
+> **STATUS 2026-07-13: built.** Lives inside the undo bar (`app/page.tsx`'s
+> `ScoreInput`), saves on blur/Enter, MANAGER-tier, and is a genuinely
+> separate write (`setGameScore()` / `POST /api/session/:id/score`) that
+> only ever patches `scoreLoser` — it does not re-touch rating/pairStats,
+> which already ran when the winner was recorded.
+
 The score is optional — but *when* it appears determines whether anyone ever enters it.
 
 ```

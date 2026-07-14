@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { recordResult } from '@/lib/firestore';
-import { hasValidCode } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { CLUB_ID } from '@/lib/constants';
 
 // Idempotent by gameId — three people all tapping "Team A won" all
@@ -10,9 +10,8 @@ import { CLUB_ID } from '@/lib/constants';
 // winner may be null — UC-7 (USECASES.md): frees the court without
 // knowing who won, so a forgotten result never freezes a court.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
-  }
+  const roleErr = requireRole(req, 'MANAGER');
+  if (roleErr) return roleErr;
 
   const { id } = await params;
   const body = await req.json().catch(() => null);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { assignCourt, ConflictError } from '@/lib/firestore';
-import { hasValidCode } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import type { PlayerId } from '@/lib/types';
 
 // Used for both manual court assignment (RECORD mode, "Start court")
@@ -9,9 +9,8 @@ import type { PlayerId } from '@/lib/types';
 // always sends four/teamA/teamB, and the server always re-validates
 // inside the transaction. See ARCHITECTURE.md §3.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
-  }
+  const roleErr = requireRole(req, 'MANAGER');
+  if (roleErr) return roleErr;
 
   const { id } = await params;
   const body = await req.json().catch(() => null);

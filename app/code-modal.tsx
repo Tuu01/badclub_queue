@@ -1,18 +1,26 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { subscribeCodeModal, submitCode, cancelCodeEntry } from '@/lib/client-code';
+import { subscribeCodeModal, submitCode, cancelCodeEntry, getCode } from '@/lib/client-code';
+import { refreshRole } from '@/lib/client-role';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
 export function CodeModal() {
   const [open, setOpen] = useState(false);
-  const [retry, setRetry] = useState(false);
+  const [message, setMessage] = useState('');
   const [value, setValue] = useState('');
 
-  useEffect(() => subscribeCodeModal((isOpen, isRetry) => {
+  // A code from a previous visit persists in localStorage, but the cached
+  // role doesn't survive a fresh page load — re-derive it once on mount so
+  // hide/show state is right before the user does anything.
+  useEffect(() => {
+    if (getCode()) void refreshRole();
+  }, []);
+
+  useEffect(() => subscribeCodeModal((isOpen, msg) => {
     setOpen(isOpen);
-    setRetry(isRetry);
+    setMessage(msg);
     setValue('');
   }), []);
 
@@ -27,9 +35,7 @@ export function CodeModal() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-court-900/80 p-4">
       <form onSubmit={submit} className="w-full max-w-sm space-y-3 rounded-xl border border-line-700 bg-court-800 p-4">
-        <p className="text-[16px] font-medium text-line-000">
-          {retry ? 'Wrong code. Try again:' : 'Enter the group access code:'}
-        </p>
+        <p className="text-[16px] font-medium text-line-000">{message}</p>
         <input
           autoFocus
           value={value}

@@ -6,6 +6,9 @@ import { usePlayers } from '@/lib/use-players';
 import { writeFetch } from '@/lib/client-code';
 import { startSort, answer, currentPair, isDone, type SortState } from './pairwise-sort';
 import type { PublicPlayerDoc } from '@/lib/firestore';
+import { useActor } from '@/lib/client-identity';
+import { WhoAmI } from '../../shared-ui';
+import { AdminGate } from '../admin-gate';
 
 const DIVS: Array<1 | 2> = [1, 2];
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
@@ -41,8 +44,9 @@ function clearProgress(div: 1 | 2): void {
   window.localStorage.removeItem(savedKey(div));
 }
 
-export default function AdminPlayersPage() {
+function AdminPlayersPageInner() {
   const { players, loading } = usePlayers();
+  const actor = useActor();
   const [form, setForm] = useState<{ name: string; gender: 'M' | 'F'; div: 1 | 2 }>({
     name: '', gender: 'M', div: 1,
   });
@@ -149,7 +153,10 @@ export default function AdminPlayersPage() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-2xl space-y-8 bg-court-900 p-4 text-line-000">
-      <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
+      <div className="flex items-center justify-between">
+        {actor && <WhoAmI name={actor.name} short />}
+        <Link href="/admin" className="text-[13px] text-line-400">← Back to admin</Link>
+      </div>
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Players</p>
 
       <form onSubmit={addPlayer} className="flex flex-wrap items-end gap-3">
@@ -258,7 +265,7 @@ export default function AdminPlayersPage() {
                         className="flex min-h-[56px] items-center justify-between gap-2 rounded-xl border border-line-700 bg-court-800 px-3 py-2"
                       >
                         <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
-                          {i + 1}. {p.name} {p.gender === 'F' ? '♀' : ''}
+                          {i + 1}. {p.name} <span className="text-line-400">{p.gender}</span>
                         </span>
                         <div className="flex items-center gap-1">
                           <button
@@ -297,7 +304,9 @@ export default function AdminPlayersPage() {
                     key={p.id}
                     className="flex min-h-[56px] items-center justify-between rounded-xl border border-line-800 px-3 py-2 text-line-400"
                   >
-                    <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>{p.name}</span>
+                    <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
+                      {p.name} <span className="text-line-700">{p.gender}</span>
+                    </span>
                     <button onClick={() => toggleActive(p)} className="text-[13px] text-line-000">Restore</button>
                   </li>
                 ))}
@@ -307,5 +316,13 @@ export default function AdminPlayersPage() {
         </>
       )}
     </main>
+  );
+}
+
+export default function AdminPlayersPage() {
+  return (
+    <AdminGate>
+      <AdminPlayersPageInner />
+    </AdminGate>
   );
 }

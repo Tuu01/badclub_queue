@@ -9,12 +9,16 @@ import { writeFetch } from '@/lib/client-code';
 import { nextSaturday } from '@/lib/session-id';
 import { estimateSession, safeHeadcount } from '@/lib/session-estimate';
 import { matchPastedNames, type MatchedLine } from '@/lib/fuzzy-match';
+import { useActor } from '@/lib/client-identity';
+import { WhoAmI } from '../../../shared-ui';
+import { AdminGate } from '../../admin-gate';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
-export default function NewSessionPage() {
+function NewSessionPageInner() {
   const router = useRouter();
   const { players, loading } = usePlayers();
+  const actor = useActor();
   const active = useMemo(() => players.filter(p => p.active), [players]);
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -165,7 +169,10 @@ export default function NewSessionPage() {
   if (step === 1) {
     return (
       <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
-        <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
+        <div className="flex items-center justify-between">
+          {actor && <WhoAmI name={actor.name} short />}
+          <Link href="/admin" className="text-[13px] text-line-400">← Back to admin</Link>
+        </div>
         <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
           {editingId ? 'Edit next session — Step 1' : 'New session — Step 1'}
         </p>
@@ -257,7 +264,10 @@ export default function NewSessionPage() {
 
   return (
     <main className="mx-auto min-h-dvh max-w-2xl space-y-6 bg-court-900 p-4 text-line-000">
-      <Link href="/admin" className="block text-[13px] text-line-400">← Back to admin</Link>
+      <div className="flex items-center justify-between">
+        {actor && <WhoAmI name={actor.name} short />}
+        <Link href="/admin" className="text-[13px] text-line-400">← Back to admin</Link>
+      </div>
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
         {editingId ? 'Edit next session — Step 2' : 'New session — Step 2'}
       </p>
@@ -347,5 +357,13 @@ export default function NewSessionPage() {
 
       {message && <p className="text-center text-[13px] text-line-400">{message}</p>}
     </main>
+  );
+}
+
+export default function NewSessionPage() {
+  return (
+    <AdminGate>
+      <NewSessionPageInner />
+    </AdminGate>
   );
 }

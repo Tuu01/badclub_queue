@@ -1,5 +1,6 @@
 import { suggestMatch, buildQueue } from '../lib/matchmaking';
 import { seedMu, SIGMA_INIT, updateRatings, winProbability, teamRating } from '../lib/rating';
+import { bandForMu, computeSkillBand } from '../lib/skill-band';
 import { DEFAULT_CONFIG, pairKey } from '../lib/types';
 import type { ClubPlayer, Attendance, PairStats, PlayerId } from '../lib/types';
 
@@ -246,6 +247,42 @@ console.log('\n■ Performance (210 options)');
   }
   const ms = (Date.now() - t0) / 1000;
   check(`scanning all 210 options < 5ms (actual ${ms.toFixed(2)}ms)`, ms < 5, `→ ${ms.toFixed(2)}ms`);
+}
+
+// =============================================================
+console.log('\n■ SKILL BANDS');
+{
+  // threshold map + exact >= boundaries
+  check('mu 40 → Beginner', bandForMu(40) === 'BEGINNER');
+  check('mu 50 → Intermediate', bandForMu(50) === 'INTERMEDIATE');
+  check('mu 65 → Advanced', bandForMu(65) === 'ADVANCED');
+  check('boundary 44.9 → Beginner', bandForMu(44.9) === 'BEGINNER');
+  check('boundary 45 → Intermediate', bandForMu(45) === 'INTERMEDIATE');
+  check('boundary 60 → Advanced', bandForMu(60) === 'ADVANCED');
+
+  // the fuzzy div overlap must NOT split across bands: best-D2 (52) and
+  // weakest-D1 (55) both land Intermediate. Ties to the seed test above.
+  check('div overlap: best-D2 and weakest-D1 share a band',
+        bandForMu(seedMu(2, 1, 11)) === bandForMu(seedMu(1, 11, 11)) &&
+        bandForMu(seedMu(2, 1, 11)) === 'INTERMEDIATE');
+
+  // min-games gate: clear mu but < 3 games → no band
+  check('min-games gate hides band under 3 games', computeSkillBand(65, 3.5, 2).band === null);
+  check('null mu → no band', computeSkillBand(null, 8, 20).band === null);
+  check('band appears at 3 games', computeSkillBand(65, 3.5, 20).band === 'ADVANCED');
+
+  // provisional flag = !converged (converged = sigma < 4 && games >= 15)
+  check('provisional true at high sigma', computeSkillBand(65, 8, 5).provisional === true);
+  check('provisional false when converged', computeSkillBand(65, 3.5, 20).provisional === false);
+
+  // settling: converged player near a boundary straddles it
+  const nearAdv = computeSkillBand(59, 3.5, 20); // 59 ± 3.5 crosses 60
+  check('settling true near boundary', nearAdv.settling === true && nearAdv.adjacentBand === 'ADVANCED');
+  const midBand = computeSkillBand(52, 3, 20); // 52 ± 3 stays inside 45–60
+  check('settling false mid-band', midBand.settling === false && midBand.adjacentBand === null);
+
+  // NO-LEAK GUARD: mu must never appear in the result
+  check('result never carries mu', !('mu' in computeSkillBand(65, 3.5, 20)));
 }
 
 console.log(`\n${'─'.repeat(58)}`);

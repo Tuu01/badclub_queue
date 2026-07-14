@@ -10,11 +10,16 @@
 // shells), which would otherwise silently break every write action.
 // ============================================================
 
+import { refreshRole, clearCachedRole } from './client-role';
+
 const KEY = 'appCode';
+
+const MSG_INITIAL = 'Enter the group access code:';
+const MSG_WRONG = 'Wrong code. Try again:';
 
 type Resolver = (code: string | null) => void;
 let pendingResolvers: Resolver[] = [];
-const listeners = new Set<(open: boolean, retry: boolean) => void>();
+const listeners = new Set<(open: boolean, message: string) => void>();
 
 export function getCode(): string | null {
   if (typeof window === 'undefined') return null;
@@ -23,22 +28,24 @@ export function getCode(): string | null {
 
 export function setCode(code: string): void {
   window.localStorage.setItem(KEY, code);
+  void refreshRole();
 }
 
 export function clearCode(): void {
   window.localStorage.removeItem(KEY);
+  clearCachedRole();
 }
 
 /** Subscribed to by <CodeModal>. Not for direct use elsewhere. */
-export function subscribeCodeModal(fn: (open: boolean, retry: boolean) => void): () => void {
+export function subscribeCodeModal(fn: (open: boolean, message: string) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-function askForCode(retry: boolean): Promise<string | null> {
+function askForCode(message: string): Promise<string | null> {
   return new Promise(resolve => {
     pendingResolvers.push(resolve);
-    listeners.forEach(fn => fn(true, retry));
+    listeners.forEach(fn => fn(true, message));
   });
 }
 
@@ -46,7 +53,7 @@ function askForCode(retry: boolean): Promise<string | null> {
 export function submitCode(code: string): void {
   const resolvers = pendingResolvers;
   pendingResolvers = [];
-  listeners.forEach(fn => fn(false, false));
+  listeners.forEach(fn => fn(false, ''));
   resolvers.forEach(r => r(code));
 }
 
@@ -54,19 +61,32 @@ export function submitCode(code: string): void {
 export function cancelCodeEntry(): void {
   const resolvers = pendingResolvers;
   pendingResolvers = [];
-  listeners.forEach(fn => fn(false, false));
+  listeners.forEach(fn => fn(false, ''));
   resolvers.forEach(r => r(null));
 }
 
 /**
- * fetch() for WRITE requests. If there's no code yet, opens the modal
- * and waits for it. If the server returns 401 (wrong code), clears
- * the old code, opens the modal again, and retries once.
+ * Opens the code modal directly, outside of any write attempt — for the
+ * "Enter code" affordance shown to a PLAYER so they can become a
+ * MANAGER/ADMIN without first tapping a button they can't press.
+ */
+export async function enterCode(): Promise<void> {
+  const code = await askForCode(MSG_INITIAL);
+  if (code) setCode(code);
+}
+
+/**
+ * fetch() for WRITE requests.
+ *  - No code yet → opens the modal and waits.
+ *  - 401 (missing/wrong code) → clears it, re-prompts, retries once.
+ *  - 403 (a real code, just not a strong enough one) → never a dead
+ *    end: says which code it actually needs and offers to enter it,
+ *    then retries with whatever was typed.
  */
 export async function writeFetch(input: string, init: RequestInit = {}): Promise<Response> {
   let code = getCode();
   if (!code) {
-    code = await askForCode(false);
+    code = await askForCode(MSG_INITIAL);
     if (!code) throw new Error('code required to write');
     setCode(code);
   }
@@ -78,12 +98,21 @@ export async function writeFetch(input: string, init: RequestInit = {}): Promise
     });
 
   let res = await doFetch(code);
+
   if (res.status === 401) {
     clearCode();
-    const retry = await askForCode(true);
+    const retry = await askForCode(MSG_WRONG);
     if (!retry) return res;
     setCode(retry);
     res = await doFetch(retry);
+  } else if (res.status === 403) {
+    const body = await res.clone().json().catch(() => null);
+    const needs = body?.requiredRole === 'ADMIN' ? 'admin' : 'manager';
+    const upgrade = await askForCode(`This needs the ${needs} code:`);
+    if (!upgrade) return res;
+    setCode(upgrade);
+    res = await doFetch(upgrade);
   }
+
   return res;
 }

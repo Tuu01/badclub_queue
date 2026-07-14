@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { createSessionRoster, SessionExistsError } from '@/lib/firestore';
-import { hasValidCode } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 import { CLUB_ID } from '@/lib/constants';
 
 // /admin/session/new — finalizes courts + the session roster for a
@@ -10,9 +10,8 @@ import { CLUB_ID } from '@/lib/constants';
 // status — editing an existing DRAFT on purpose goes through
 // /api/session/:id/draft instead. See SessionExistsError.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
-  }
+  const roleErr = requireRole(req, 'ADMIN');
+  if (roleErr) return roleErr;
 
   const { id } = await params;
   const body = await req.json().catch(() => null);

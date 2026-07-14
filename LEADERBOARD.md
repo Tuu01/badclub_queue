@@ -1,11 +1,22 @@
 # LEADERBOARD.md — Scoreboards, ranks, and why they matter more than the algorithm
 
-> **STATUS: approved as a plan. NOT approved for build.**
-> Only §7 Phase 1 (the session-end rating snapshot) is in scope now — and
-> only because it's the one irreversible thing. Everything else waits until
-> `sigma < 4.0` for real players, ~6 months. This does not override
-> CLAUDE.md's "do not build: leaderboard" — that rule stands until this
-> status line changes.
+> **STATUS: Phase 1 and Phase 2 built. Phase 3 still waits.**
+> §7 Phase 1 (session-end rating snapshot) and Phase 2 (`/board` Mixing +
+> Attendance tabs, `/me`) are live — approved and built. Skill and
+> Improvement are LOCKED tabs on `/board`: tappable, showing real unlock
+> progress, but not publishing a rating until `sigma < 4.0` for real
+> players, ~6 months out. This does not override CLAUDE.md's
+> "do not build: leaderboard" for anything beyond what's described here —
+> that rule still stands for a live Skill/Improvement board, and for
+> anything not in this file (no charts, no wildcards UI, etc).
+>
+> **STATUS 2026-07-14 — provisional skill BANDS now show before convergence.**
+> The Skill tab and `/me` now display a COARSE band (Beginner / Intermediate /
+> Advanced), never a number, from the first few games — labelled "provisional"
+> until `isConverged()`, then "confirmed". This deliberately overrides §5's
+> "do not publish before convergence" **for the band only**; the precise-score
+> gate still stands (no number is ever shown or sent). Owner-approved. See the
+> §5 decision note for the full rationale and safeguards.
 
 ---
 
@@ -172,6 +183,36 @@ isConverged(p) → p.sigma < 4.0 && p.gamesTotal >= 15
 
 Publishing a number that's wrong by ±8 in front of 22 people creates drama, **and the number will in fact be wrong.** You get to lose their trust exactly once.
 
+> **DECISION 2026-07-14 — provisional skill BANDS (overrides the above, for the band only).**
+> Owner-approved. Waiting ~6 months to see *anything* skill-related is too long,
+> so a coarse **band** (Beginner / Intermediate / Advanced) now shows from the
+> first few games on `/me` and the `/board` Skill tab. This does NOT reopen the
+> door to an early *number* — the precise-score gate stands untouched.
+>
+> Why a band is safe where a number isn't:
+> - **It's a bucket, not a rank.** A wide band (mu < 45 / 45–60 / ≥ 60) stays
+>   *correct* even while the number is still ±8 noisy — a genuinely mid player
+>   lands in Intermediate whether the estimate reads 47 or 55. The band's width
+>   deliberately absorbs the fuzzy div overlap (best-D2 ≈ 52, weakest-D1 ≈ 55
+>   both land Intermediate — see `lib/skill-band.ts`).
+> - **Grouped, never a ladder.** `/board` buckets names by band, alphabetical
+>   within a band — no 1-2-3 ordering, so nobody "sits at the bottom of the
+>   table." That ladder was the actual fear in §10, and it's designed out.
+> - **3-game floor.** Below `BAND_MIN_GAMES` (3) no band shows at all — the band
+>   never reflects the pure admin seed with zero match evidence.
+> - **mu never leaves the server.** The band is derived from mu inside
+>   `getBoardData()`; only the coarse label crosses the wire. DevTools shows
+>   "Intermediate", never a number.
+> - **Provisional is honest.** Until `isConverged()` the band is labelled
+>   "provisional" (it can still move); after, "confirmed". Absence re-inflates
+>   sigma → flips back to provisional (you keep your skill, lose your standing —
+>   same as §1).
+>
+> Implementation: `lib/skill-band.ts` (pure, tested in `tests/engine.test.ts`),
+> `getBoardData()` in `lib/firestore.ts`, the `SkillTab` in `app/board/page.tsx`,
+> and the Skill card in `app/me/page.tsx`. **If this is ever reverted, update this
+> note — don't just delete the code.**
+
 ---
 
 ## 6. What's missing from the data today
@@ -263,10 +304,18 @@ Boards live at **`/me`** and **`/board`** — read at home, on the sofa, on Tues
                        Your rating over time (once snapshots exist)
 
 /board                 The four boards, tabbed.
-                       Default tab: MIXING, not SKILL.
-                       ← this default is a deliberate statement of what
-                         the club values. Don't quietly change it.
+                       STATUS 2026-07-14: default tab changed to SKILL
+                       (order: Skill, Attendance, Mixing, Improvement),
+                       overriding the original "Mixing first" rule below
+                       — done deliberately, not quietly, on request.
+                       ← if this changes again, update this note, don't
+                         just edit the code.
 ```
+
+*(Original reasoning, kept for context — no longer the live default:)* the
+club-values argument for Mixing-first was real, but the person who owns
+that call chose Skill instead. The point was never "never change it," it
+was "don't change it by accident."
 
 ### Design rules
 
@@ -302,11 +351,11 @@ At one hour a week, this isn't decoration — **it is the retention channel**, a
 
 | Risk | Mitigation |
 |---|---|
-| **Publishing scores too early** | Gate on `sigma < 4.0 && games ≥ 15`. Six months. No exceptions. |
-| **The 3–5 women sit at the bottom of a single table** | Four boards. Two of them need no skill at all. Default tab is Mixing. |
+| **Publishing scores too early** | Gate on `sigma < 4.0 && games ≥ 15`. Six months. No exceptions — for the *number*. A coarse provisional **band** (not a number) now shows earlier, mitigated four ways: buckets not numbers, grouped-not-ranked, a 3-game floor, and mu staying server-side. See the §5 DECISION 2026-07-14 note. |
+| **The 3–5 women sit at the bottom of a single table** | Four boards. Two of them need no skill at all. (Default tab is now Skill, not Mixing — see §8 STATUS note; watch whether this risk resurfaces.) |
 | **People start dodging hard matches to protect their score** | **Structurally impossible.** The app assigns matches. This is your unfair advantage. |
 | **Someone reads `mu` out of the session doc via devtools** | Accepted v1 trade-off — already documented in `firestore.rules`. Revisit only if someone actually complains. |
-| **The Skill board becomes the only one anyone looks at** | Ship Improvement at the same time. Default to Mixing. Put Mixing first in the summary. |
+| **The Skill board becomes the only one anyone looks at** | Ship Improvement at the same time. Put Mixing first in the post-session summary (F-2) regardless of `/board`'s own default tab. |
 | **Rank decay feels punitive** | It isn't a penalty — it's `sigma` telling the truth. Say so in the UI: *"We're less sure about you now. Play 3 games."* |
 
 ---

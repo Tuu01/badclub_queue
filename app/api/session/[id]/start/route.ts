@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { startSession, AlreadyLiveError } from '@/lib/firestore';
-import { hasValidCode } from '@/lib/auth';
+import { requireRole } from '@/lib/auth';
 
 function formatPlayDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -13,9 +13,8 @@ function formatPlayDate(dateStr: string): string {
 // if another session is already LIVE — see AlreadyLiveError in
 // lib/firestore.ts.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!hasValidCode(req)) {
-    return NextResponse.json({ error: 'invalid code' }, { status: 401 });
-  }
+  const roleErr = requireRole(req, 'MANAGER');
+  if (roleErr) return roleErr;
 
   const { id } = await params;
   try {

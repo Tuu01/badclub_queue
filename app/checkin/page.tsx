@@ -2,9 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { usePlayers } from '@/lib/use-players';
 import { useActiveSession } from '@/lib/use-active-session';
-import { writeFetch } from '@/lib/client-code';
+import { writeFetch, enterCode } from '@/lib/client-code';
+import { useRole } from '@/lib/client-role';
+import { useActor } from '@/lib/client-identity';
+import { WhoAmI } from '../shared-ui';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
@@ -13,6 +17,9 @@ export default function CheckinPage() {
   const { players, loading } = usePlayers();
   const { session, loading: sessionLoading } = useActiveSession();
   const sessionId = session?.id ?? '';
+  const role = useRole();
+  const canManage = role === 'MANAGER' || role === 'ADMIN';
+  const actor = useActor();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showMore, setShowMore] = useState(false);
@@ -49,7 +56,7 @@ export default function CheckinPage() {
   async function done() {
     if (busy) return;
     if (selected.size === 0) {
-      router.push('/');
+      router.push('/session');
       return;
     }
     setBusy(true);
@@ -60,7 +67,7 @@ export default function CheckinPage() {
         body: JSON.stringify({ playerIds: [...selected] }),
       });
       if (res.ok) {
-        router.push('/');
+        router.push('/session');
       } else {
         const body = await res.json().catch(() => null);
         setMessage(`Error: ${body?.error ?? res.status}`);
@@ -113,9 +120,29 @@ export default function CheckinPage() {
     );
   }
 
+  if (!canManage) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-court-900 px-4 text-center text-line-000">
+        <p className="text-line-400">Check-in needs the manager code.</p>
+        <button
+          type="button"
+          onClick={() => void enterCode()}
+          className="min-h-[44px] text-[13px] text-line-000 underline"
+        >
+          Enter manager code
+        </button>
+        <Link href="/" className="min-h-[44px] text-[13px] text-line-400 underline">← Home</Link>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-dvh bg-court-900 px-4 py-6 text-line-000">
-      <p className="mb-4 font-display text-xl" style={{ fontStretch: '115%' }}>Check-in</p>
+      <div className="flex items-center justify-between">
+        {actor && <WhoAmI name={actor.name} short />}
+        <Link href="/" className="text-[13px] text-line-400">← Home</Link>
+      </div>
+      <p className="mb-4 mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>Check-in</p>
 
       {loading || sessionLoading ? (
         <p className="text-line-400">Loading…</p>
