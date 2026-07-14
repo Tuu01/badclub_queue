@@ -77,10 +77,7 @@ function Inner({ tid }: { tid: string }) {
 
   return (
     <main className="mx-auto min-h-dvh max-w-xl space-y-4 bg-court-900 p-4 text-line-000">
-      <div className="flex items-center justify-between">
-        {actor && <WhoAmI name={actor.name} short />}
-        <Link href="/" className="text-[13px] text-line-400">← Home</Link>
-      </div>
+      {actor && <WhoAmI name={actor.name} short />}
       <div className="flex items-center justify-between">
         <p className="font-display text-xl" style={{ fontStretch: '115%' }}>{t.name} · running</p>
         <button disabled={busy} onClick={async () => { if (!confirm('End the tournament? The champion gets crowned and it becomes read-only.')) return; await act({ action: 'end' }); router.push(`/tournament/${tid}`); }}
