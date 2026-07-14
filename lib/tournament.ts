@@ -333,6 +333,21 @@ export async function listTournaments(db: Db): Promise<TournamentDoc[]> {
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
+/** ADMIN — delete a tournament and its games + audit subcollections
+ *  (Firestore doesn't cascade). Same shape as deleteSession. Never
+ *  touches the club — tournament data is separate. */
+export async function deleteTournament(db: Db, tid: string): Promise<void> {
+  const [games, audit] = await Promise.all([
+    db.collection(`tournaments/${tid}/games`).get(),
+    db.collection(`tournaments/${tid}/audit`).get(),
+  ]);
+  const batch = db.batch();
+  for (const d of games.docs) batch.delete(d.ref);
+  for (const d of audit.docs) batch.delete(d.ref);
+  batch.delete(db.doc(`tournaments/${tid}`));
+  await batch.commit();
+}
+
 // ---------- PHASE 2 · SETUP TEAMS (the gate) ----------
 /** Data entry only — the admin draws on paper; the app just stores it.
  *  Refused once finalized (frozen). */

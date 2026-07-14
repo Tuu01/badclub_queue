@@ -19,9 +19,21 @@ function Inner() {
   const [form, setForm] = useState({ name: '', date: '', courtCount: 4 });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteText, setDeleteText] = useState('');
 
   function load() { fetch('/api/tournaments').then(r => r.json()).then(b => setList(b.tournaments)); }
   useEffect(load, []);
+
+  async function del(id: string) {
+    if (busy || deleteText.trim().toLowerCase() !== 'delete') return;
+    setBusy(true); setError(null);
+    try {
+      const res = await writeFetch(`/api/tournament/${id}`, { method: 'DELETE' });
+      if (!res.ok) { setError((await res.json().catch(() => null))?.error ?? `Error ${res.status}`); return; }
+      setDeleteId(null); setDeleteText(''); load();
+    } finally { setBusy(false); }
+  }
 
   async function create() {
     if (busy || !form.name.trim() || !form.date.trim()) return;
@@ -89,15 +101,44 @@ function Inner() {
               <ul className="divide-y divide-line-700 rounded-xl border border-line-700">
                 {list.map(t => (
                   <li key={t.id}>
-                    <Link href={dest(t)} className={`flex items-center justify-between gap-2 px-4 py-3 ${TAP}`}>
-                      <span className="min-w-0">
+                    <div className="flex items-center justify-between gap-2 px-4 py-3">
+                      <Link href={dest(t)} className={`min-w-0 flex-1 ${TAP}`}>
                         <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>{t.name}</span>
                         <span className="block text-[13px] text-line-400">{t.date}{t.imported ? ' · imported' : ''}</span>
-                      </span>
-                      <span className="shrink-0 text-[13px] text-line-400">
-                        {t.status === 'DONE' ? 'done' : t.teamsFinalized ? 'live →' : 'set up teams →'}
-                      </span>
-                    </Link>
+                      </Link>
+                      <div className="flex shrink-0 items-center gap-3 text-[13px] font-medium">
+                        <span className="text-line-400">
+                          {t.status === 'DONE' ? 'done' : t.teamsFinalized ? 'live →' : 'set up teams →'}
+                        </span>
+                        <button disabled={busy} onClick={() => { setDeleteId(t.id); setDeleteText(''); }} className={`text-signal disabled:opacity-40 ${TAP}`}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    {deleteId === t.id && (
+                      <div className="space-y-2 border-t border-line-700 bg-court-800 p-3">
+                        <p className="text-[13px] text-line-400">
+                          Delete <span className="text-line-000">{t.name}</span> permanently? This can&apos;t be undone
+                          {t.imported || t.teamsFinalized ? ' — every recorded game goes with it.' : '.'}
+                        </p>
+                        <input
+                          type="text" value={deleteText} onChange={e => setDeleteText(e.target.value)}
+                          placeholder="Type delete to confirm"
+                          className="h-11 w-full rounded-lg border border-line-700 bg-transparent px-3 text-[15px] text-line-000 placeholder:text-line-400"
+                        />
+                        <div className="flex gap-2">
+                          <button disabled={busy || deleteText.trim().toLowerCase() !== 'delete'} onClick={() => del(t.id)}
+                            className={`min-h-[44px] flex-1 rounded-lg border border-signal bg-signal text-[14px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}>
+                            Delete
+                          </button>
+                          <button onClick={() => { setDeleteId(null); setDeleteText(''); }}
+                            className={`min-h-[44px] rounded-lg border border-line-700 px-4 text-[14px] font-medium text-line-400 ${TAP}`}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
