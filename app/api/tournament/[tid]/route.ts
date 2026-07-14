@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import {
   getTournamentView, saveTeams, finalizeTeams, endTournament, addSubstitution,
-  scheduleGame, startClock, recordTournamentResult, undoTournamentResult,
+  scheduleGame, startClock, recordTournamentResult, undoTournamentResult, deleteTournament,
 } from '@/lib/tournament';
 import type { PublicPlayerDoc } from '@/lib/firestore';
 import { requireRole } from '@/lib/auth';
@@ -23,6 +23,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tid
     names[p.id] = p.name;
   }
   return NextResponse.json({ ...view, names });
+}
+
+// ADMIN — delete a tournament outright (doc + games + audit). Same as
+// the session delete; the UI gates it behind a type-"delete" confirm.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ tid: string }> }) {
+  const roleErr = requireRole(req, 'ADMIN');
+  if (roleErr) return roleErr;
+  const { tid } = await params;
+  await deleteTournament(adminDb, tid);
+  return NextResponse.json({ ok: true });
 }
 
 // One POST endpoint, action-discriminated. Structural actions (setup,

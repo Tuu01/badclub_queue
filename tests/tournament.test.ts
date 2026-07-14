@@ -7,7 +7,7 @@
 // ============================================================
 
 import { createMemDb } from '../lib/repo-mem';
-import { importTournament, getTournamentView, getPlayerTrophies, getLatestChampion } from '../lib/tournament';
+import { importTournament, getTournamentView, getPlayerTrophies, getLatestChampion, deleteTournament } from '../lib/tournament';
 import { seedMu, SIGMA_INIT } from '../lib/rating';
 import type { TournamentImportInput } from '../lib/tournament';
 
@@ -103,6 +103,11 @@ async function main() {
   check('same tournament id', again.tournamentId === res.tournamentId && again.alreadyExists === true);
   check('still 4 players (no dup)', (await clubPlayers(db)).length === 4);
   check('still 3 games (no dup)', (await getTournamentView(db, res.tournamentId))!.games.length === 3);
+
+  console.log('\n■ delete tournament');
+  await deleteTournament(db, res.tournamentId);
+  check('tournament gone after delete', (await getTournamentView(db, res.tournamentId)) === null);
+  check('games subcollection cleared', (await db.collection(`tournaments/${res.tournamentId}/games`).get()).size === 0);
 
   console.log('\n■ unknown name → HARD STOP');
   const bad: TournamentImportInput = {
