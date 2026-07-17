@@ -15,6 +15,11 @@ import { AdminGate } from '../../admin-gate';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
+// Accent-insensitive so a search for "cuong"/"duc" matches "Cường"/"Đức".
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
 function NewSessionPageInner() {
   const router = useRouter();
   const { players, loading } = usePlayers();
@@ -32,6 +37,7 @@ function NewSessionPageInner() {
   const [matches, setMatches] = useState<MatchedLine[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   // Editing the existing next-up DRAFT (wrong date/headcount/courts) is
   // cheap because nothing's checked in yet — see lib/firestore.ts
@@ -94,6 +100,12 @@ function NewSessionPageInner() {
     () => active.filter(p => selected.has(p.id)).sort((a, b) => a.name.localeCompare(b.name)),
     [active, selected],
   );
+
+  // Filter the (long) not-selected list by the search box.
+  const notSelectedShown = useMemo(() => {
+    const q = normalizeName(query);
+    return q ? notSelected.filter(p => normalizeName(p.name).includes(q)) : notSelected;
+  }, [notSelected, query]);
 
   async function confirm() {
     if (selected.size === 0 || busy) return;
@@ -328,8 +340,17 @@ function NewSessionPageInner() {
 
       <div>
         <p className="mb-2 text-[11px] font-medium text-line-400">not selected · sorted by longest absent</p>
+        <input
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Search a name…"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="mb-2 h-11 w-full rounded-lg border border-line-700 bg-transparent px-3 text-[15px] text-line-000 placeholder:text-line-400"
+        />
         <div className="grid grid-cols-2 gap-2">
-          {notSelected.map(p => (
+          {notSelectedShown.map(p => (
             <button
               key={p.id}
               onClick={() => toggle(p.id)}
@@ -339,6 +360,11 @@ function NewSessionPageInner() {
               {p.name}
             </button>
           ))}
+          {notSelectedShown.length === 0 && (
+            <p className="col-span-2 text-[13px] text-line-400">
+              {query ? 'No name matches.' : 'Everyone is selected.'}
+            </p>
+          )}
         </div>
       </div>
 
