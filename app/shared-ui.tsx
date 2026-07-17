@@ -27,7 +27,6 @@ export const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 // anyone elevated can log back down.
 const NAV_ITEMS = [
   { key: 'home', href: '/', label: 'Home' },
-  { key: 'sessions', href: '/sessions', label: 'Sessions' },
   { key: 'board', href: '/board', label: 'Leaderboard' },
   { key: 'me', href: '/me', label: 'My stats' },
   { key: 'tournaments', href: '/tournaments', label: 'Tournaments' },
