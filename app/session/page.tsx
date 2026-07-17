@@ -628,21 +628,18 @@ export default function SessionPage() {
     <main className="flex min-h-dvh flex-col bg-court-900 pb-6 text-line-000">
       {/* status bar — the name up front is UC-19: fat fingers, one tap
           to fix, no confirmation. */}
-      <header className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-1.5 text-[13px] text-line-400">
-        <span className="flex items-center gap-1.5">
-          {actor && <WhoAmI name={actor.name} short />}
-          {actor && <span>·</span>}
-          {session.courtCount} courts · {presentCount} people
-        </span>
+      <header className="flex min-h-11 items-center justify-between gap-x-3 px-4 py-1.5 text-[13px] text-line-400">
+        {actor ? <WhoAmI name={actor.name} short /> : <span />}
         <span className="flex flex-wrap items-center justify-end gap-x-2">
-          <span className="tabular flex items-center gap-1.5">
-            {clock}
-            <ConnectionDot state={connection} />
-          </span>
+          <ConnectionDot state={connection} />
           <span aria-hidden className="text-line-700">·</span>
           <RoleControls current="session" />
         </span>
       </header>
+      {/* Ambient session context — kept quiet, off the top control row. */}
+      <p className="px-4 pb-1 text-[12px] text-line-400">
+        {session.courtCount} courts · {presentCount} people · <span className="tabular">{clock}</span>
+      </p>
 
       {stale && (
         <p className="px-4 pb-2 text-[13px] text-signal">Offline. What you&apos;re seeing is stale.</p>
