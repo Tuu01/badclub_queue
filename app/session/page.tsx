@@ -1118,19 +1118,27 @@ export default function SessionPage() {
             manager actions ride in via `extra`; pause is done by tapping
             your own queue row, and mode-switching has its own tab strip
             higher up, so neither is duplicated here. */}
-        <AppNavRow
-          current="session"
-          showRole={false}
-          extra={canManage ? (
-            <>
-              <button onClick={() => setEndConfirming(true)} disabled={busy} className="underline disabled:opacity-40">
-                End session
-              </button>
-              <span aria-hidden className="text-line-700">·</span>
-              <Link href="/checkin" className="underline">Check people in</Link>
-            </>
-          ) : undefined}
-        />
+        {/* Manager ACTIONS — proper buttons, kept distinct from the page-nav
+            links below (an action isn't a place you navigate to). */}
+        {canManage && (
+          <div className="flex gap-2 px-4 pt-1">
+            <Link
+              href="/checkin"
+              className={`flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-line-700 text-[14px] font-medium text-line-000 ${TAP}`}
+            >
+              Check people in
+            </Link>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setEndConfirming(true)}
+              className={`min-h-[44px] flex-1 rounded-lg border border-line-700 text-[14px] font-medium text-line-400 disabled:opacity-40 ${TAP}`}
+            >
+              End session
+            </button>
+          </div>
+        )}
+        <AppNavRow current="session" showRole={false} />
       </PageFooter>
 
       {/* Recorded/score prompt — centered, not a slim bottom bar.

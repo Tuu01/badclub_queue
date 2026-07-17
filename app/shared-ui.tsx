@@ -5,7 +5,7 @@
 // of duplicated in both files.
 
 import Link from 'next/link';
-import { useState, useRef, Fragment, type ReactNode, type ChangeEvent } from 'react';
+import { useState, useRef, Fragment, type ChangeEvent } from 'react';
 import { useRole } from '@/lib/client-role';
 import { enterCode, clearCode, writeFetch } from '@/lib/client-code';
 import { clearActor } from '@/lib/client-identity';
@@ -63,7 +63,7 @@ export function RoleControls({ current }: { current?: string }) {
   return <button type="button" onClick={() => void enterCode()} className="underline">Organiser sign-in</button>;
 }
 
-export function AppNavRow({ current, extra, showRole = true }: { current?: string; extra?: ReactNode; showRole?: boolean }) {
+export function AppNavRow({ current, showRole = true }: { current?: string; showRole?: boolean }) {
   const sep = <span aria-hidden className="text-line-700">·</span>;
   return (
     <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
@@ -75,7 +75,6 @@ export function AppNavRow({ current, extra, showRole = true }: { current?: strin
             : <Link href={item.href} className="underline">{item.label}</Link>}
         </Fragment>
       ))}
-      {extra ? <>{sep}{extra}</> : null}
       {showRole && <>{sep}<RoleControls current={current} /></>}
     </nav>
   );
