@@ -1827,3 +1827,39 @@ export async function getSessionSummary(db: Db, clubId: string, sessionId: strin
 
   return { date: s.date, presentCount, matchCount, mostMixed, longestStreak, firstTimePairNames };
 }
+
+// ============================================================
+// PLAYER PHOTOS — tiny self-serve avatars.
+//
+// Stored in their OWN docs (clubs/{cid}/photos/{playerId}), NOT on the
+// player doc, so the frequently-read player list and getBoardData stay
+// lean. This path is server-only (default-deny in firestore.rules); the
+// client never touches it directly — it reads/writes through /api/photos.
+//
+// PLAYER-tier by design, same trust model as pause/leave (UC-13/14): a
+// photo is reversible (re-upload or clear), so the abuse case is a
+// nuisance, not a threat. The /api/photos route caps size + checks it's
+// an image; setPhoto below refuses ids that aren't real roster members.
+// ============================================================
+
+export async function getPhotos(db: Db, clubId: string): Promise<Record<PlayerId, string>> {
+  const snap = await db.collection(`clubs/${clubId}/photos`).get();
+  const out: Record<PlayerId, string> = {};
+  for (const d of snap.docs) {
+    const thumb = (d.data() as { thumb?: string } | undefined)?.thumb;
+    if (typeof thumb === 'string') out[d.id] = thumb;
+  }
+  return out;
+}
+
+export async function setPhoto(
+  db: Db, clubId: string, playerId: PlayerId, thumb: string, now = Date.now(),
+): Promise<void> {
+  const p = await db.doc(`clubs/${clubId}/players/${playerId}`).get();
+  if (!p.exists) throw new Error('unknown player');
+  await db.doc(`clubs/${clubId}/photos/${playerId}`).set({ thumb, updatedAt: now });
+}
+
+export async function clearPhoto(db: Db, clubId: string, playerId: PlayerId): Promise<void> {
+  await db.doc(`clubs/${clubId}/photos/${playerId}`).delete();
+}
