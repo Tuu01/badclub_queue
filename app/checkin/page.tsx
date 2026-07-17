@@ -8,7 +8,8 @@ import { useActiveSession } from '@/lib/use-active-session';
 import { writeFetch, enterCode } from '@/lib/client-code';
 import { useRole } from '@/lib/client-role';
 import { useActor } from '@/lib/client-identity';
-import { WhoAmI } from '../shared-ui';
+import { usePhotos } from '@/lib/use-photos';
+import { WhoAmI, PlayerAvatar } from '../shared-ui';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
@@ -28,6 +29,7 @@ export default function CheckinPage() {
 
   const [guestOpen, setGuestOpen] = useState(false);
   const [guestForm, setGuestForm] = useState<{ name: string; gender: 'M' | 'F' }>({ name: '', gender: 'M' });
+  const { photos } = usePhotos();
 
   const active = useMemo(
     () => [...players].filter(p => p.active).sort((a, b) => a.name.localeCompare(b.name)),
@@ -106,12 +108,13 @@ export default function CheckinPage() {
                 type="button"
                 onClick={() => toggle(p.id)}
                 disabled={!!already}
-                className={`min-h-[56px] w-full rounded-xl border px-3 py-2 text-left font-display text-[17px] disabled:opacity-40 ${TAP} ${
+                className={`flex min-h-[56px] w-full items-center gap-2 rounded-xl border px-3 py-2 text-left font-display text-[17px] disabled:opacity-40 ${TAP} ${
                   on ? 'border-line-000 bg-line-000 text-court-900' : 'border-line-700 text-line-000'
                 }`}
                 style={{ fontStretch: '105%' }}
               >
-                {p.name}{already ? ' ✓' : ''}
+                <PlayerAvatar name={p.name} src={photos[p.id]} size={24} />
+                <span className="truncate">{p.name}{already ? ' ✓' : ''}</span>
               </button>
             </li>
           );
