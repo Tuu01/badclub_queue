@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useActor } from '@/lib/client-identity';
-import { WhoAmI, AppNav, MyPhotoCard } from '../shared-ui';
+import { AppNav, MyPhotoCard, TopBar } from '../shared-ui';
 import { labelForBand, BAND_MIN_GAMES } from '@/lib/skill-band';
 import type { BoardData } from '@/lib/firestore';
 import type { TrophyLine } from '@/lib/tournament';
@@ -60,24 +60,18 @@ export default function MePage() {
   if (!me) {
     return (
       <main className="flex min-h-dvh flex-col bg-court-900 px-4 py-6 text-line-000">
-        <div className="flex items-center justify-between">
-          <WhoAmI name={actor.name} short />
-          <Link href="/" className="text-[13px] text-line-400">← Home</Link>
-        </div>
+        <TopBar current="me" />
         <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>{actor.name}</p>
         <div className="mt-6"><MyPhotoCard actor={actor} /></div>
         <p className="mt-6 text-[13px] text-line-400">No stats yet — come back after a few sessions.</p>
-        <AppNav current="me" />
+        <AppNav current="me" showRole={false} />
       </main>
     );
   }
 
   return (
     <main className="flex min-h-dvh flex-col bg-court-900 px-4 py-6 text-line-000">
-      <div className="flex items-center justify-between">
-        <WhoAmI name={actor.name} short />
-        <Link href="/" className="text-[13px] text-line-400">← Home</Link>
-      </div>
+      <TopBar current="me" />
       <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>{actor.name}</p>
 
       <div className="mt-6"><MyPhotoCard actor={actor} /></div>
@@ -167,7 +161,7 @@ export default function MePage() {
 
       <div className="mt-6" />
 
-      <AppNav current="me" />
+      <AppNav current="me" showRole={false} />
     </main>
   );
 }

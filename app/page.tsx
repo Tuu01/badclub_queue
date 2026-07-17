@@ -11,7 +11,7 @@ import { useRole } from '@/lib/client-role';
 import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { usePlayers } from '@/lib/use-players';
 import type { BoardData, SessionDoc } from '@/lib/firestore';
-import { TAP, EnterCodeLink, IdentityStrip, WhoAmI, AppNav, RoleControls } from './shared-ui';
+import { TAP, EnterCodeLink, IdentityStrip, AppNav, TopBar } from './shared-ui';
 
 function formatPlayDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -164,15 +164,7 @@ export default function HomePage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-court-900 px-4 py-6 text-line-000">
-      {/* Top strip: who you are (left), Organiser + Log out (right) — the
-          account/role controls sit up here on home, so the footer below is
-          left as pure page nav (showRole={false}). */}
-      <div className="mb-2 flex min-h-[24px] items-center justify-between text-[13px] text-line-400">
-        {actor ? <WhoAmI name={actor.name} short /> : <span />}
-        <div className="flex items-center gap-2">
-          <RoleControls current="home" />
-        </div>
-      </div>
+      <TopBar current="home" />
       <div className="mb-6 text-center">
         <p className="font-display text-2xl" style={{ fontStretch: '115%' }}>Badminton Queue</p>
         <p className="mt-1 text-[13px] text-line-400">Fair matches and who&apos;s up next — every Saturday.</p>

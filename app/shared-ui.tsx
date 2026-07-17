@@ -9,7 +9,7 @@ import { useState, useRef, Fragment, type ChangeEvent } from 'react';
 import { useRole } from '@/lib/client-role';
 import { useActiveSession } from '@/lib/use-active-session';
 import { enterCode, clearCode, writeFetch } from '@/lib/client-code';
-import { clearActor } from '@/lib/client-identity';
+import { clearActor, useActor } from '@/lib/client-identity';
 import { usePhotos } from '@/lib/use-photos';
 import { fileToThumbnail } from '@/lib/resize-image';
 
@@ -85,6 +85,19 @@ export function AppNavRow({ current, showRole = true }: { current?: string; show
       ))}
       {showRole && <>{sep}<RoleControls current={current} /></>}
     </nav>
+  );
+}
+
+// The standard screen top bar: who you are (left) + Organiser / Log out
+// (right). One definition so every screen's top-right matches. Home is
+// reached via the footer nav, so there's no back-arrow here.
+export function TopBar({ current }: { current?: string }) {
+  const actor = useActor();
+  return (
+    <div className="mb-2 flex min-h-[24px] items-center justify-between text-[13px] text-line-400">
+      {actor ? <WhoAmI name={actor.name} short /> : <span />}
+      <div className="flex items-center gap-2"><RoleControls current={current} /></div>
+    </div>
   );
 }
 

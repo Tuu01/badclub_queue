@@ -11,8 +11,7 @@ import Link from 'next/link';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import type { SessionDoc } from '@/lib/firestore';
-import { useActor } from '@/lib/client-identity';
-import { WhoAmI, AppNav } from '../shared-ui';
+import { AppNav, TopBar } from '../shared-ui';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
@@ -23,7 +22,6 @@ function formatPlayDate(dateStr: string): string {
 }
 
 export default function SessionsPage() {
-  const actor = useActor();
   const [sessions, setSessions] = useState<SessionDoc[] | null>(null);
 
   useEffect(() => {
@@ -39,10 +37,7 @@ export default function SessionsPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col bg-court-900 px-4 py-6 text-line-000">
-      <div className="flex items-center justify-between">
-        {actor ? <WhoAmI name={actor.name} short /> : <span />}
-        <Link href="/" className="text-[13px] text-line-400">← Home</Link>
-      </div>
+      <TopBar current="sessions" />
       <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>Sessions</p>
       <p className="mb-4 mt-1 text-[13px] text-line-400">Every club session — tap one to see its matches.</p>
 
@@ -83,7 +78,7 @@ export default function SessionsPage() {
         </div>
       )}
 
-      <AppNav current="sessions" />
+      <AppNav current="sessions" showRole={false} />
     </main>
   );
 }
