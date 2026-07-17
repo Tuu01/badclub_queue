@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase-client';
 import { useActiveSession } from '@/lib/use-active-session';
 import { writeFetch } from '@/lib/client-code';
 import { useRole } from '@/lib/client-role';
 import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { usePlayers } from '@/lib/use-players';
-import type { BoardData } from '@/lib/firestore';
+import type { BoardData, SessionDoc } from '@/lib/firestore';
 import { TAP, EnterCodeLink, IdentityStrip, WhoAmI, AppNav, RoleControls } from './shared-ui';
 
 function formatPlayDate(dateStr: string): string {
@@ -42,6 +44,54 @@ function MixingTeaser({ actor }: { actor: { id: string; name: string } }) {
       <p>🤝 You&apos;ve played with {data.partners} of {data.possible} people</p>
       {data.streak > 0 && <p>🔥 {data.streak} session{data.streak === 1 ? '' : 's'} in a row</p>}
     </div>
+  );
+}
+
+// Fills the mid-week home screen (which is otherwise mostly empty when no
+// session is on) with something useful: the last few completed sessions,
+// tapping into their matches. Renders nothing until there's real history —
+// no empty box.
+function RecentSessions() {
+  const [sessions, setSessions] = useState<SessionDoc[] | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'sessions'), snap => {
+      const docs = snap.docs
+        .map(d => d.data() as SessionDoc)
+        .filter(s => s.status === 'DONE')
+        .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+        .slice(0, 3);
+      setSessions(docs);
+    });
+    return unsub;
+  }, []);
+
+  if (!sessions || sessions.length === 0) return null;
+
+  return (
+    <section className="mx-auto mt-8 w-full max-w-sm">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-line-400">Recent sessions</p>
+        <Link href="/sessions" className={`text-[13px] text-line-400 underline ${TAP}`}>See all →</Link>
+      </div>
+      <div className="divide-y divide-line-700 overflow-hidden rounded-xl border border-line-700">
+        {sessions.map(s => {
+          const present = Object.values(s.attendance ?? {}).filter(a => a.status !== 'LEFT').length;
+          return (
+            <Link
+              key={s.id}
+              href={`/history?session=${s.id}`}
+              className={`flex items-center justify-between px-4 py-3 ${TAP}`}
+            >
+              <span className="font-display text-[15px]" style={{ fontStretch: '105%' }}>{formatPlayDate(s.date)}</span>
+              <span className="text-[13px] text-line-400">
+                {present} played · {s.courtCount} court{s.courtCount === 1 ? '' : 's'}
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -214,6 +264,8 @@ export default function HomePage() {
       <section className="mx-auto max-w-xs">
         {actor ? <MixingTeaser actor={actor} /> : <IdentityStrip roster={activeRoster} onPick={saveActor} />}
       </section>
+
+      <RecentSessions />
 
       <div className="mt-6" />
 
