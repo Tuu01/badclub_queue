@@ -3,17 +3,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useActiveSession } from '@/lib/use-active-session';
-import { writeFetch, clearCode } from '@/lib/client-code';
+import { writeFetch } from '@/lib/client-code';
 import { useRole } from '@/lib/client-role';
 import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { computeQueue } from '@/lib/session-view';
 import type { PlayerId, Suggestion } from '@/lib/types';
 import { formatSummaryText } from '@/lib/session-summary-format';
-import { TAP, AdminLink, EnterCodeLink, IdentityStrip, LogoutLink, WhoAmI, PageFooter, ScoreInput } from '../shared-ui';
+import { TAP, AdminLink, EnterCodeLink, IdentityStrip, LogoutLink, WhoAmI, PageFooter, ScoreInput, AppNavRow } from '../shared-ui';
 import { CourtDiagram } from '../CourtDiagram';
 
 const MODES = ['ASSIGN', 'RECORD'] as const;
 type Mode = (typeof MODES)[number];
+
+// The stored mode values (ASSIGN/RECORD/OFF) are terrible on-screen labels:
+// "Record" reads as "record the score", but it actually means "hand-pick the
+// teams" — and scores get recorded in BOTH modes. So we show plain labels and
+// a one-line hint of what the mode does, without touching the stored values.
+const MODE_LABEL: Record<string, string> = { ASSIGN: 'App picks', RECORD: 'Pick myself', OFF: 'By hand' };
+const MODE_HINT: Record<string, string> = {
+  ASSIGN: 'The app suggests a fair match for each free court — tap “Take court” to accept it, or “Swap” to choose your own four.',
+  RECORD: 'You choose who plays — tap “Start court” on a free court to pick the four yourself.',
+  OFF: 'Teams are picked by hand and not tracked.',
+};
 
 const RECONNECT_MS = 5_000;
 const OFFLINE_MS = 15_000;
@@ -663,7 +674,7 @@ export default function SessionPage() {
           "History" sits in the same row but isn't a mode itself — it
           links to /history (its own PLAYER-tier screen), not a
           session.mode change, so it's a separate link, not a MODES entry. */}
-      <div className="flex items-center gap-2 px-4 py-3">
+      <div className="flex items-center gap-2 px-4 pt-3">
         {canManage ? (
           <div className="flex flex-1 gap-px">
             {MODES.map(m => (
@@ -674,13 +685,13 @@ export default function SessionPage() {
                   session.mode === m ? 'border-line-000 bg-line-000 text-court-900' : 'border-line-700 text-line-400'
                 }`}
               >
-                {m.charAt(0) + m.slice(1).toLowerCase()}
+                {MODE_LABEL[m]}
               </button>
             ))}
           </div>
         ) : (
           <p className="flex-1 text-[13px] text-line-400">
-            Mode: {session.mode.charAt(0) + session.mode.slice(1).toLowerCase()}
+            Matches: {MODE_LABEL[session.mode] ?? session.mode}
           </p>
         )}
         <Link
@@ -690,6 +701,11 @@ export default function SessionPage() {
           History
         </Link>
       </div>
+      {canManage && (
+        <p className="px-4 pb-2 pt-1.5 text-[12px] leading-snug text-line-400">
+          {MODE_HINT[session.mode]}
+        </p>
+      )}
 
       {/* Manager/admin shortcut on top of UC-14's open, no-code pause —
           not a replacement for it. Lists everyone currently AVAILABLE
@@ -1090,50 +1106,23 @@ export default function SessionPage() {
           </div>
         )}
 
-        {/* Same structure as the home screen's footer (app/page.tsx) —
-            plain flex-wrap, no inline-style/overflow-scroll workarounds.
-            "Pause me" and "Manual teams" aren't here: pause is done by
-            tapping your own row in the queue above, and mode-switching
-            has its own first-class tab strip higher on this screen (see
-            MODES.map above) — the footer versions were pure duplicates.
-            See CLAUDE.md "ROLES" for why Admin/Log out are role-gated. */}
-        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
-          <Link href="/" className="underline">Home</Link>
-          <span className="text-line-700">·</span>
-          <Link href="/board" className="underline">Leaderboard</Link>
-          <span className="text-line-700">·</span>
-          <Link href="/me" className="underline">My stats</Link>
-          {canManage && (
+        {/* The shared nav row (Home · Leaderboard · My stats · Tournaments
+            · Organiser) — one definition, see AppNavRow. The session-only
+            manager actions ride in via `extra`; pause is done by tapping
+            your own queue row, and mode-switching has its own tab strip
+            higher up, so neither is duplicated here. */}
+        <AppNavRow
+          current="session"
+          extra={canManage ? (
             <>
-              <span className="text-line-700">·</span>
               <button onClick={() => setEndConfirming(true)} disabled={busy} className="underline disabled:opacity-40">
                 End session
               </button>
-              <span className="text-line-700">·</span>
+              <span aria-hidden className="text-line-700">·</span>
               <Link href="/checkin" className="underline">Check people in</Link>
             </>
-          )}
-          {role === 'ADMIN' && (
-            <>
-              <span className="text-line-700">·</span>
-              <Link href="/admin" className="underline">Admin</Link>
-            </>
-          )}
-          {role === 'PLAYER' && (
-            <>
-              <span className="text-line-700">·</span>
-              <EnterCodeLink label="Enter code" />
-            </>
-          )}
-          {role !== 'PLAYER' && (
-            <>
-              <span className="text-line-700">·</span>
-              <button type="button" onClick={() => clearCode()} className="underline">
-                Log out ({role === 'ADMIN' ? 'admin' : 'manager'})
-              </button>
-            </>
-          )}
-        </div>
+          ) : undefined}
+        />
       </PageFooter>
 
       {/* Recorded/score prompt — centered, not a slim bottom bar.
