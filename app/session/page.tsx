@@ -9,7 +9,7 @@ import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { computeQueue } from '@/lib/session-view';
 import type { PlayerId, Suggestion } from '@/lib/types';
 import { formatSummaryText } from '@/lib/session-summary-format';
-import { TAP, AdminLink, EnterCodeLink, IdentityStrip, LogoutLink, WhoAmI, PageFooter, ScoreInput, AppNavRow, PlayerAvatar } from '../shared-ui';
+import { TAP, AdminLink, EnterCodeLink, IdentityStrip, LogoutLink, WhoAmI, PageFooter, ScoreInput, AppNavRow, PlayerAvatar, RoleControls } from '../shared-ui';
 import { usePhotos } from '@/lib/use-photos';
 import { CourtDiagram } from '../CourtDiagram';
 
@@ -628,15 +628,19 @@ export default function SessionPage() {
     <main className="flex min-h-dvh flex-col bg-court-900 pb-6 text-line-000">
       {/* status bar — the name up front is UC-19: fat fingers, one tap
           to fix, no confirmation. */}
-      <header className="flex h-11 items-center justify-between px-4 text-[13px] text-line-400">
+      <header className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-1.5 text-[13px] text-line-400">
         <span className="flex items-center gap-1.5">
           {actor && <WhoAmI name={actor.name} short />}
           {actor && <span>·</span>}
           {session.courtCount} courts · {presentCount} people
         </span>
-        <span className="tabular flex items-center gap-2">
-          {clock}
-          <ConnectionDot state={connection} />
+        <span className="flex flex-wrap items-center justify-end gap-x-2">
+          <span className="tabular flex items-center gap-1.5">
+            {clock}
+            <ConnectionDot state={connection} />
+          </span>
+          <span aria-hidden className="text-line-700">·</span>
+          <RoleControls current="session" />
         </span>
       </header>
 
@@ -1119,6 +1123,7 @@ export default function SessionPage() {
             higher up, so neither is duplicated here. */}
         <AppNavRow
           current="session"
+          showRole={false}
           extra={canManage ? (
             <>
               <button onClick={() => setEndConfirming(true)} disabled={busy} className="underline disabled:opacity-40">
