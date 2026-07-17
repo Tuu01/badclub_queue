@@ -38,6 +38,7 @@ function NewSessionPageInner() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
 
   // Editing the existing next-up DRAFT (wrong date/headcount/courts) is
   // cheap because nothing's checked in yet — see lib/firestore.ts
@@ -285,19 +286,32 @@ function NewSessionPageInner() {
       </p>
       <p className="text-[13px] text-line-400">{playDate} · {courts} courts · target {headcount} people</p>
 
-      <div className="space-y-2">
-        <label className="text-[13px] font-medium text-line-400">Paste the list from the group chat</label>
-        <textarea
-          value={pasteText}
-          onChange={e => setPasteText(e.target.value)}
-          rows={6}
-          placeholder={'Cuong\nHa\nLan\n...'}
-          className="w-full rounded-xl border border-line-700 bg-transparent p-3 text-[16px] text-line-000 placeholder:text-line-400"
-        />
-        <button onClick={runMatch} className={`min-h-[48px] rounded-xl border border-line-000 bg-line-000 px-4 text-[16px] font-medium text-court-900 ${TAP}`}>
-          Match names
+      {showPaste ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[13px] font-medium text-line-400">Paste the list from the group chat</label>
+            <button type="button" onClick={() => setShowPaste(false)} className="text-[13px] text-line-400 underline">Hide</button>
+          </div>
+          <textarea
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            rows={6}
+            placeholder={'Cuong\nHa\nLan\n...'}
+            className="w-full rounded-xl border border-line-700 bg-transparent p-3 text-[16px] text-line-000 placeholder:text-line-400"
+          />
+          <button onClick={runMatch} className={`min-h-[48px] rounded-xl border border-line-000 bg-line-000 px-4 text-[16px] font-medium text-court-900 ${TAP}`}>
+            Match names
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowPaste(true)}
+          className={`min-h-[44px] text-[13px] text-line-400 underline ${TAP}`}
+        >
+          + Paste a list from the group chat
         </button>
-      </div>
+      )}
 
       {matches && (
         <div className="space-y-2 rounded-xl border border-line-700 p-3">
