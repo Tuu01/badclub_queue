@@ -9,7 +9,8 @@ import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { computeQueue } from '@/lib/session-view';
 import type { PlayerId, Suggestion } from '@/lib/types';
 import { formatSummaryText } from '@/lib/session-summary-format';
-import { TAP, AdminLink, EnterCodeLink, IdentityStrip, LogoutLink, WhoAmI, PageFooter, ScoreInput, AppNavRow } from '../shared-ui';
+import { TAP, AdminLink, EnterCodeLink, IdentityStrip, LogoutLink, WhoAmI, PageFooter, ScoreInput, AppNavRow, PlayerAvatar } from '../shared-ui';
+import { usePhotos } from '@/lib/use-photos';
 import { CourtDiagram } from '../CourtDiagram';
 
 const MODES = ['ASSIGN', 'RECORD'] as const;
@@ -136,6 +137,7 @@ export default function SessionPage() {
   const actor = useActor();
   const role = useRole();
   const canManage = role === 'MANAGER' || role === 'ADMIN';
+  const { photos } = usePhotos();
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1019,11 +1021,15 @@ export default function SessionPage() {
                   onClick={() => setPlayerActionId(open ? null : q.id)}
                   className={`flex w-full items-center justify-between px-4 py-2.5 text-left disabled:opacity-40 ${mine ? 'bg-signal-dim' : ''}`}
                 >
-                  <span
-                    className={`font-display text-[17px] ${mine ? 'text-signal' : 'text-line-000'}`}
-                    style={{ fontStretch: '105%' }}
-                  >
-                    {i + 1}&nbsp;&nbsp;{session.players[q.id]?.name ?? q.id}
+                  <span className="flex items-center gap-2">
+                    <span className={`tabular text-[13px] ${mine ? 'text-signal' : 'text-line-400'}`}>{i + 1}</span>
+                    <PlayerAvatar name={session.players[q.id]?.name ?? q.id} src={photos[q.id]} size={22} />
+                    <span
+                      className={`font-display text-[17px] ${mine ? 'text-signal' : 'text-line-000'}`}
+                      style={{ fontStretch: '105%' }}
+                    >
+                      {session.players[q.id]?.name ?? q.id}
+                    </span>
                   </span>
                   <span className={`tabular text-[13px] ${mine ? 'text-signal' : 'text-line-400'}`}>
                     {Math.round(q.waitMs / 60_000)} min · {q.games}
