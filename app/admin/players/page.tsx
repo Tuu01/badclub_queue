@@ -13,6 +13,11 @@ import { AdminGate } from '../admin-gate';
 const DIVS: Array<1 | 2> = [1, 2];
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
+// Accent-insensitive so "cuong"/"duc" match "Cường"/"Đức".
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
 function savedKey(div: 1 | 2): string {
   return `rank-sort-div-${div}`;
 }
@@ -51,6 +56,7 @@ function AdminPlayersPageInner() {
     name: '', gender: 'M', div: 1,
   });
   const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
   // Optimistic local reorder (arrows or a finished comparison sort) — server confirms after.
   const [localOrder, setLocalOrder] = useState<Record<number, string[]> | null>(null);
 
@@ -151,6 +157,10 @@ function AdminPlayersPageInner() {
     }
   }
 
+  const searchQ = normalizeName(query);
+  const searching = searchQ.length > 0;
+  const inactiveShown = searching ? inactive.filter(p => normalizeName(p.name).includes(searchQ)) : inactive;
+
   return (
     <main className="mx-auto min-h-dvh max-w-2xl space-y-8 bg-court-900 p-4 text-line-000">
       <div className="flex items-center justify-between">
@@ -199,20 +209,31 @@ function AdminPlayersPageInner() {
         </button>
       </form>
 
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Search a player…"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        className="h-12 w-full rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000 placeholder:text-line-400"
+      />
+
       {loading ? (
         <p className="text-line-400">Loading…</p>
       ) : (
         <>
           {DIVS.map(div => {
-            const ranking = rankingDiv === div && sortState;
+            const ranking = !searching && rankingDiv === div && sortState;
             const saved = savedByDiv[div];
             const namesById = new Map(byDiv[div].map(p => [p.id, p.name]));
+            const shown = searching ? byDiv[div].filter(p => normalizeName(p.name).includes(searchQ)) : byDiv[div];
 
             return (
               <section key={div}>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <p className="text-[11px] font-medium text-line-400">div {div} · strongest to weakest</p>
-                  {!ranking && (
+                  {!ranking && !searching && (
                     <button
                       onClick={() => beginRanking(div)}
                       className={`text-[13px] text-line-400 underline ${TAP}`}
@@ -259,47 +280,56 @@ function AdminPlayersPageInner() {
                   })()
                 ) : (
                   <ul className="space-y-2">
-                    {byDiv[div].map((p, i) => (
-                      <li
-                        key={p.id}
-                        className="flex min-h-[56px] items-center justify-between gap-2 rounded-xl border border-line-700 bg-court-800 px-3 py-2"
-                      >
-                        <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
-                          {i + 1}. {p.name} <span className="text-line-400">{p.gender}</span>
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            disabled={i === 0}
-                            onClick={() => moveInDiv(div, i, -1)}
-                            aria-label={`Move ${p.name} up`}
-                            className={`flex h-11 w-11 items-center justify-center rounded-lg border border-line-700 text-line-400 disabled:opacity-30 ${TAP}`}
-                          >
-                            ▲
-                          </button>
-                          <button
-                            disabled={i === byDiv[div].length - 1}
-                            onClick={() => moveInDiv(div, i, 1)}
-                            aria-label={`Move ${p.name} down`}
-                            className={`flex h-11 w-11 items-center justify-center rounded-lg border border-line-700 text-line-400 disabled:opacity-30 ${TAP}`}
-                          >
-                            ▼
-                          </button>
-                          <button onClick={() => toggleActive(p)} className="ml-2 text-[13px] text-line-400">Remove</button>
-                        </div>
-                      </li>
-                    ))}
-                    {byDiv[div].length === 0 && <li className="text-[13px] text-line-400">Nobody here yet.</li>}
+                    {shown.map(p => {
+                      const i = byDiv[div].indexOf(p); // true rank position, even when filtered
+                      return (
+                        <li
+                          key={p.id}
+                          className="flex min-h-[56px] items-center justify-between gap-2 rounded-xl border border-line-700 bg-court-800 px-3 py-2"
+                        >
+                          <span className="font-display text-[17px]" style={{ fontStretch: '105%' }}>
+                            {i + 1}. {p.name} <span className="text-line-400">{p.gender}</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {!searching && (
+                              <>
+                                <button
+                                  disabled={i === 0}
+                                  onClick={() => moveInDiv(div, i, -1)}
+                                  aria-label={`Move ${p.name} up`}
+                                  className={`flex h-11 w-11 items-center justify-center rounded-lg border border-line-700 text-line-400 disabled:opacity-30 ${TAP}`}
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  disabled={i === byDiv[div].length - 1}
+                                  onClick={() => moveInDiv(div, i, 1)}
+                                  aria-label={`Move ${p.name} down`}
+                                  className={`flex h-11 w-11 items-center justify-center rounded-lg border border-line-700 text-line-400 disabled:opacity-30 ${TAP}`}
+                                >
+                                  ▼
+                                </button>
+                              </>
+                            )}
+                            <button onClick={() => toggleActive(p)} className="ml-2 text-[13px] text-line-400">Remove</button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                    {shown.length === 0 && (
+                      <li className="text-[13px] text-line-400">{searching ? 'No name matches.' : 'Nobody here yet.'}</li>
+                    )}
                   </ul>
                 )}
               </section>
             );
           })}
 
-          {inactive.length > 0 && (
+          {inactiveShown.length > 0 && (
             <section>
-              <p className="mb-2 text-[11px] font-medium text-line-400">removed ({inactive.length})</p>
+              <p className="mb-2 text-[11px] font-medium text-line-400">removed ({inactiveShown.length})</p>
               <ul className="space-y-2">
-                {inactive.map(p => (
+                {inactiveShown.map(p => (
                   <li
                     key={p.id}
                     className="flex min-h-[56px] items-center justify-between rounded-xl border border-line-800 px-3 py-2 text-line-400"
