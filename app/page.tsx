@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useActiveSession } from '@/lib/use-active-session';
-import { writeFetch, enterCode } from '@/lib/client-code';
+import { writeFetch } from '@/lib/client-code';
 import { useRole } from '@/lib/client-role';
 import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { usePlayers } from '@/lib/use-players';
@@ -114,22 +114,13 @@ export default function HomePage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-court-900 px-4 py-6 text-line-000">
-      {/* Top strip: who you are (left) + a VISIBLE way in (right). The
-          Organiser door used to be a tiny footer link nobody found — now
-          it sits top-right on the home screen, like a normal app's
-          sign-in. Players get the code prompt; admins jump to the hub. */}
-      <div className="mb-2 flex min-h-[24px] items-center justify-between">
-        {actor ? <WhoAmI name={actor.name} short /> : <span />}
-        {role === 'ADMIN' ? (
-          <Link href="/admin" className={`text-[13px] text-line-400 underline ${TAP}`}>Organiser →</Link>
-        ) : role === 'PLAYER' ? (
-          <button type="button" onClick={() => void enterCode()} className={`text-[13px] text-line-400 underline ${TAP}`}>
-            Organiser sign-in
-          </button>
-        ) : (
-          <span />
-        )}
-      </div>
+      {/* Just who you are, top-left. The Organiser door lives in the shared
+          nav footer (on every screen), so it isn't repeated up here. */}
+      {actor && (
+        <div className="mb-2">
+          <WhoAmI name={actor.name} short />
+        </div>
+      )}
       <div className="mb-6 text-center">
         <p className="font-display text-2xl" style={{ fontStretch: '115%' }}>Badminton Queue</p>
         <p className="mt-1 text-[13px] text-line-400">Fair matches and who&apos;s up next — every Saturday.</p>
