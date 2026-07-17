@@ -5,10 +5,12 @@
 // of duplicated in both files.
 
 import Link from 'next/link';
-import { useState, Fragment, type ReactNode } from 'react';
+import { useState, useRef, Fragment, type ReactNode, type ChangeEvent } from 'react';
 import { useRole } from '@/lib/client-role';
 import { enterCode, clearCode, writeFetch } from '@/lib/client-code';
 import { clearActor } from '@/lib/client-identity';
+import { usePhotos } from '@/lib/use-photos';
+import { fileToThumbnail } from '@/lib/resize-image';
 
 export const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 
@@ -131,6 +133,7 @@ export function IdentityStrip({
   onPick: (a: { id: string; name: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { photos } = usePhotos();
   if (!open) {
     return (
       <button
@@ -150,13 +153,119 @@ export function IdentityStrip({
           key={p.id}
           type="button"
           onClick={() => onPick(p)}
-          className={`min-h-[48px] rounded-xl border border-line-700 px-3 text-left font-display text-[16px] text-line-000 ${TAP}`}
+          className={`flex min-h-[48px] items-center gap-2 rounded-xl border border-line-700 px-3 text-left font-display text-[16px] text-line-000 ${TAP}`}
           style={{ fontStretch: '105%' }}
         >
-          {p.name}
+          <PlayerAvatar name={p.name} src={photos[p.id]} size={26} />
+          <span className="truncate">{p.name}</span>
         </button>
       ))}
       {roster.length === 0 && <p className="col-span-2 text-line-400">No players yet.</p>}
+    </div>
+  );
+}
+
+// A face, or a clean monochrome initials fallback (so unphotographed
+// people still look intentional). `src` is a small JPEG data URI from
+// usePhotos. The photo — not colour — is what carries recognition, so the
+// fallback stays on-brand grey.
+export function PlayerAvatar({ name, src, size = 28 }: { name: string; src?: string | null; size?: number }) {
+  const initials =
+    name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?';
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        style={{ width: size, height: size }}
+        className="flex-none rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <span
+      style={{ width: size, height: size, fontSize: Math.max(9, Math.round(size * 0.38)) }}
+      className="grid flex-none place-items-center rounded-full border border-line-700 bg-court-800 font-display leading-none text-line-400"
+    >
+      {initials}
+    </span>
+  );
+}
+
+// Self-serve: set the photo for whoever you've picked as your name. No
+// code — same PLAYER-tier trust as pause/leave (a photo is reversible).
+// The file is resized to a tiny thumbnail in the browser before upload.
+export function MyPhotoCard({ actor }: { actor: { id: string; name: string } }) {
+  const { photos, setLocal } = usePhotos();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const src = photos[actor.id];
+
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const thumb = await fileToThumbnail(file);
+      const res = await fetch('/api/photos', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ playerId: actor.id, thumb }),
+      });
+      if (res.ok) setLocal(actor.id, thumb);
+      else setError('Could not save that photo.');
+    } catch {
+      setError('Could not read that image.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/photos', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ playerId: actor.id }),
+      });
+      if (res.ok) setLocal(actor.id, null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line-700 p-3">
+      <PlayerAvatar name={actor.name} src={src} size={48} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] text-line-000">Your photo</p>
+        <p className="text-[13px] text-line-400">
+          {error ?? 'So people recognise you in the queue.'}
+        </p>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
+      <div className="flex flex-none flex-col items-end gap-1">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          className={`text-[13px] text-line-000 underline disabled:opacity-40 ${TAP}`}
+        >
+          {busy ? '…' : src ? 'Change' : 'Add photo'}
+        </button>
+        {src && !busy && (
+          <button type="button" onClick={remove} className="text-[13px] text-line-400 underline">Remove</button>
+        )}
+      </div>
     </div>
   );
 }
