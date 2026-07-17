@@ -171,7 +171,7 @@ export default function AdminHubPage() {
         <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Admin</p>
 
         <Card href="/admin/sessions" title="Sessions" subtitle="Create a session, or view every session by date." />
-        <Card href="/admin/players" title="Players" subtitle="Manage the club roster and seed ranking." />
+        <Card href="/admin/players" title="Players" subtitle="Manage the club roster and rank players by skill." />
         <Card href="/admin/tournament" title="Tournaments" subtitle="Create and run a tournament, or import history." />
 
         <ManagerRiskCalculator />

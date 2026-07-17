@@ -24,13 +24,13 @@ function StatusLabel({ status }: { status: SessionDoc['status'] | undefined }) {
     return (
       <span className="flex items-center gap-1.5 text-live">
         <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
-        LIVE
+        Live
       </span>
     );
   }
-  if (status === 'DRAFT') return <span className="text-line-000">DRAFT</span>;
-  if (status === 'DONE') return <span className="text-line-700">DONE</span>;
-  return <span className="text-line-700">— (pre-lifecycle)</span>;
+  if (status === 'DRAFT') return <span className="text-line-000">Not started</span>;
+  if (status === 'DONE') return <span className="text-line-700">Done</span>;
+  return <span className="text-line-700">Not started</span>;
 }
 
 function AllSessionsPageInner() {
