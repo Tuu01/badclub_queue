@@ -135,14 +135,17 @@ export default function HomePage() {
         <p className="mt-1 text-[13px] text-line-400">Fair matches and who&apos;s up next — every Saturday.</p>
       </div>
 
-      <section className="flex flex-col items-center gap-2 text-center">
+      {/* Phase 5 (Refined Dark): the session status lives in its own card
+          — the screen's most important block, so it gets real weight and a
+          clear edge instead of floating as loose centered text. */}
+      <section className="mx-auto w-full max-w-sm">
         {liveConflict ? (
-          <>
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-line-700 bg-court-800 p-5 text-center">
             <p className="text-[13px] font-medium text-signal">⚠ Two sessions are live — that&apos;s a bug.</p>
             <Link href="/session" className={`text-[13px] text-line-000 underline ${TAP}`}>See /session</Link>
-          </>
+          </div>
         ) : session?.status === 'LIVE' ? (
-          <>
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-line-700 bg-court-800 p-5 text-center">
             <p className="flex items-center gap-1.5 text-[13px] text-live">
               <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
               Session is live · {formatPlayDate(session.date)}
@@ -151,7 +154,7 @@ export default function HomePage() {
               checkedIn ? (
                 <p className="text-[13px] text-line-000">✓ You&apos;re checked in tonight</p>
               ) : (
-                <p className="max-w-xs text-[13px] text-line-400">
+                <p className="text-[13px] text-line-400">
                   {canManage
                     ? "You're not checked in yet."
                     : "You're not checked in yet — a manager will tap you in."}
@@ -160,13 +163,13 @@ export default function HomePage() {
             )}
             <Link
               href="/session"
-              className={`mt-2 flex min-h-[56px] w-full max-w-xs items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
+              className={`mt-2 flex min-h-[56px] w-full items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
             >
               {checkedIn ? 'See the queue' : 'Go to session'}
             </Link>
-          </>
+          </div>
         ) : session?.status === 'DRAFT' ? (
-          <>
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-line-700 bg-court-800 p-5 text-center">
             <p className="text-[13px] text-line-400">Next session</p>
             <p className="font-display text-xl" style={{ fontStretch: '115%' }}>
               {formatPlayDate(session.date)} · {session.targetHeadcount} players
@@ -176,11 +179,11 @@ export default function HomePage() {
                 <button
                   disabled={busy}
                   onClick={startSession}
-                  className={`mt-2 flex min-h-[56px] w-full max-w-xs items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
+                  className={`mt-2 flex min-h-[56px] w-full items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 disabled:opacity-40 ${TAP}`}
                 >
                   Start session
                 </button>
-                {startError && <p className="mt-2 max-w-xs text-[13px] text-signal">{startError}</p>}
+                {startError && <p className="mt-2 text-[13px] text-signal">{startError}</p>}
               </>
             ) : (
               <div className="mt-2 space-y-2">
@@ -188,26 +191,28 @@ export default function HomePage() {
                 <EnterCodeLink label="Enter manager code" />
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <p className="text-line-400">No badminton on right now — check back on Saturday.</p>
+          <p className="text-center text-line-400">No badminton on right now — check back on Saturday.</p>
         )}
       </section>
 
       {/* Live tournament — same treatment as a live session. Admin lands
           on the run screen; everyone else on the standings/live view. */}
       {liveTournament && (
-        <section className="mt-4 flex flex-col items-center gap-2 text-center">
-          <p className="flex items-center gap-1.5 text-[13px] text-live">
-            <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
-            🏆 Tournament is live · {liveTournament.name}
-          </p>
-          <Link
-            href={role === 'ADMIN' ? `/tournament/${liveTournament.id}/run` : `/tournament/${liveTournament.id}`}
-            className={`mt-1 flex min-h-[56px] w-full max-w-xs items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
-          >
-            Go to tournament
-          </Link>
+        <section className="mx-auto mt-4 w-full max-w-sm">
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-line-700 bg-court-800 p-5 text-center">
+            <p className="flex items-center gap-1.5 text-[13px] text-live">
+              <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
+              🏆 Tournament is live · {liveTournament.name}
+            </p>
+            <Link
+              href={role === 'ADMIN' ? `/tournament/${liveTournament.id}/run` : `/tournament/${liveTournament.id}`}
+              className={`mt-1 flex min-h-[56px] w-full items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
+            >
+              Go to tournament
+            </Link>
+          </div>
         </section>
       )}
 
