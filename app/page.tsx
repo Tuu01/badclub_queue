@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useActiveSession } from '@/lib/use-active-session';
-import { writeFetch, clearCode } from '@/lib/client-code';
+import { writeFetch, enterCode } from '@/lib/client-code';
 import { useRole } from '@/lib/client-role';
 import { useActor, setActor as saveActor } from '@/lib/client-identity';
 import { usePlayers } from '@/lib/use-players';
 import type { BoardData } from '@/lib/firestore';
-import { TAP, EnterCodeLink, IdentityStrip, WhoAmI, PageFooter } from './shared-ui';
+import { TAP, EnterCodeLink, IdentityStrip, WhoAmI, AppNav } from './shared-ui';
 
 function formatPlayDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -81,6 +81,16 @@ export default function HomePage() {
     .filter(p => p.active)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Honest "are you actually in tonight?" status. Picking your name on
+  // this screen sets WHO YOU ARE (for your stats) — it does NOT check you
+  // in; a manager does that. Without this line a player picks their name,
+  // nothing visibly happens, and they're left wondering if they're in the
+  // queue. Show their real attendance status instead of staying silent.
+  const myStatus = session?.status === 'LIVE' && actor
+    ? session.attendance[actor.id]?.status
+    : undefined;
+  const checkedIn = myStatus === 'AVAILABLE' || myStatus === 'PLAYING' || myStatus === 'PAUSED';
+
   async function startSession() {
     if (!session || busy) return;
     setBusy(true);
@@ -104,12 +114,26 @@ export default function HomePage() {
 
   return (
     <main className="flex min-h-dvh flex-col bg-court-900 px-4 py-6 text-line-000">
-      {actor && (
-        <div className="mb-2">
-          <WhoAmI name={actor.name} short />
-        </div>
-      )}
-      <p className="mb-6 text-center font-display text-2xl" style={{ fontStretch: '115%' }}>Badminton Queue</p>
+      {/* Top strip: who you are (left) + a VISIBLE way in (right). The
+          Organiser door used to be a tiny footer link nobody found — now
+          it sits top-right on the home screen, like a normal app's
+          sign-in. Players get the code prompt; admins jump to the hub. */}
+      <div className="mb-2 flex min-h-[24px] items-center justify-between">
+        {actor ? <WhoAmI name={actor.name} short /> : <span />}
+        {role === 'ADMIN' ? (
+          <Link href="/admin" className={`text-[13px] text-line-400 underline ${TAP}`}>Organiser →</Link>
+        ) : role === 'PLAYER' ? (
+          <button type="button" onClick={() => void enterCode()} className={`text-[13px] text-line-400 underline ${TAP}`}>
+            Organiser sign-in
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+      <div className="mb-6 text-center">
+        <p className="font-display text-2xl" style={{ fontStretch: '115%' }}>Badminton Queue</p>
+        <p className="mt-1 text-[13px] text-line-400">Fair matches and who&apos;s up next — every Saturday.</p>
+      </div>
 
       <section className="flex flex-col items-center gap-2 text-center">
         {liveConflict ? (
@@ -123,11 +147,22 @@ export default function HomePage() {
               <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
               Session is live · {formatPlayDate(session.date)}
             </p>
+            {actor && (
+              checkedIn ? (
+                <p className="text-[13px] text-line-000">✓ You&apos;re checked in tonight</p>
+              ) : (
+                <p className="max-w-xs text-[13px] text-line-400">
+                  {canManage
+                    ? "You're not checked in yet."
+                    : "You're not checked in yet — a manager will tap you in."}
+                </p>
+              )
+            )}
             <Link
               href="/session"
               className={`mt-2 flex min-h-[56px] w-full max-w-xs items-center justify-center rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}
             >
-              Go to session
+              {checkedIn ? 'See the queue' : 'Go to session'}
             </Link>
           </>
         ) : session?.status === 'DRAFT' ? (
@@ -155,7 +190,7 @@ export default function HomePage() {
             )}
           </>
         ) : (
-          <p className="text-line-400">No session yet.</p>
+          <p className="text-line-400">No badminton on right now — check back on Saturday.</p>
         )}
       </section>
 
@@ -184,35 +219,7 @@ export default function HomePage() {
 
       <div className="mt-6" />
 
-      <PageFooter border={false}>
-        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
-          <Link href="/board" className="underline">Leaderboard</Link>
-          <span className="text-line-700">·</span>
-          <Link href="/me" className="underline">My stats</Link>
-          <span className="text-line-700">·</span>
-          <Link href="/tournaments" className="underline">Tournaments</Link>
-          {role === 'PLAYER' && (
-            <>
-              <span className="text-line-700">·</span>
-              <EnterCodeLink label="Enter code" />
-            </>
-          )}
-          {role === 'ADMIN' && (
-            <>
-              <span className="text-line-700">·</span>
-              <Link href="/admin" className="underline">Admin</Link>
-            </>
-          )}
-          {role !== 'PLAYER' && (
-            <>
-              <span className="text-line-700">·</span>
-              <button type="button" onClick={() => clearCode()} className="underline">
-                Log out ({role === 'ADMIN' ? 'admin' : 'manager'})
-              </button>
-            </>
-          )}
-        </div>
-      </PageFooter>
+      <AppNav current="home" />
     </main>
   );
 }

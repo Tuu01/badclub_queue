@@ -40,8 +40,16 @@ export function CodeModal() {
           autoFocus
           value={value}
           onChange={e => setValue(e.target.value)}
-          className="h-14 w-full rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000"
+          placeholder="Manager or organiser code"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="h-14 w-full rounded-xl border border-line-700 bg-transparent px-3 text-[16px] text-line-000 placeholder:text-line-400"
         />
+        <p className="text-[13px] text-line-400">
+          Ask a club organiser for the code. It unlocks manager or admin actions —
+          you can log out any time.
+        </p>
         <div className="flex gap-2">
           <button type="submit" className={`min-h-[48px] flex-1 rounded-xl border border-line-000 bg-line-000 text-[16px] font-medium text-court-900 ${TAP}`}>
             OK
