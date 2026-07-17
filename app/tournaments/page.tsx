@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useActor } from '@/lib/client-identity';
-import { WhoAmI } from '../shared-ui';
+import { WhoAmI, AppNav } from '../shared-ui';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 interface TItem { id: string; name: string; date: string; status: string; teamsFinalized: boolean; imported: boolean; }
@@ -21,7 +21,7 @@ export default function TournamentsPage() {
   }, []);
 
   return (
-    <main className="mx-auto min-h-dvh max-w-2xl space-y-4 bg-court-900 px-4 py-6 text-line-000">
+    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col space-y-4 bg-court-900 px-4 py-6 text-line-000">
       <div className="flex items-center justify-between">
         {actor && <WhoAmI name={actor.name} short />}
         <Link href="/" className="text-[13px] text-line-400">← Home</Link>
@@ -58,6 +58,8 @@ export default function TournamentsPage() {
           ))}
         </ul>
       )}
+
+      <AppNav current="tournaments" />
     </main>
   );
 }

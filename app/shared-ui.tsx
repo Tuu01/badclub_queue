@@ -5,12 +5,76 @@
 // of duplicated in both files.
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, Fragment, type ReactNode } from 'react';
 import { useRole } from '@/lib/client-role';
 import { enterCode, clearCode, writeFetch } from '@/lib/client-code';
 import { clearActor } from '@/lib/client-identity';
 
 export const TAP = 'transition-transform duration-75 active:scale-[0.98]';
+
+// The ONE consistent nav across the app. Before this, every screen had
+// its own ad-hoc footer (Home a full cluster, Board just "→ your page",
+// Tournaments nothing) — so there was no MAP and half the screens were
+// partial dead ends. Same links everywhere now. NOT pinned/sticky: the
+// app deliberately has no fixed footers (they were removed on purpose),
+// so this scrolls with the page like every other footer.
+//
+// `current` marks the screen you're on (bold, not a link). The Organiser
+// door is ALWAYS here: a PLAYER can always find the way in (opens the
+// code modal — kills the "invisible gate"), an ADMIN gets the hub, and
+// anyone elevated can log back down.
+const NAV_ITEMS = [
+  { key: 'home', href: '/', label: 'Home' },
+  { key: 'board', href: '/board', label: 'Leaderboard' },
+  { key: 'me', href: '/me', label: 'My stats' },
+  { key: 'tournaments', href: '/tournaments', label: 'Tournaments' },
+] as const;
+
+// The nav ROW on its own (no footer wrapper). Screens that already have a
+// PageFooter with their own contextual bits — the Session screen's End
+// session / Check people in and its end-confirm block — drop this row in
+// and pass those actions via `extra`, so there's still ONE nav definition.
+export function AppNavRow({ current, extra }: { current?: string; extra?: ReactNode }) {
+  const role = useRole();
+  const sep = <span aria-hidden className="text-line-700">·</span>;
+  return (
+    <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
+      {NAV_ITEMS.map((item, i) => (
+        <Fragment key={item.key}>
+          {i > 0 && sep}
+          {item.key === current
+            ? <span className="font-medium text-line-000">{item.label}</span>
+            : <Link href={item.href} className="underline">{item.label}</Link>}
+        </Fragment>
+      ))}
+      {extra ? <>{sep}{extra}</> : null}
+      {sep}
+      {role === 'ADMIN' ? (
+        <>
+          <Link href="/admin" className={current === 'admin' ? 'font-medium text-line-000' : 'underline'}>Organiser</Link>
+          {sep}
+          <button type="button" onClick={() => clearCode()} className="underline">Log out</button>
+        </>
+      ) : role === 'MANAGER' ? (
+        <>
+          <span className="text-line-400">Manager mode</span>
+          {sep}
+          <button type="button" onClick={() => clearCode()} className="underline">Log out</button>
+        </>
+      ) : (
+        <button type="button" onClick={() => void enterCode()} className="underline">Organiser sign-in</button>
+      )}
+    </nav>
+  );
+}
+
+export function AppNav({ current }: { current?: string }) {
+  return (
+    <PageFooter border={false}>
+      <AppNavRow current={current} />
+    </PageFooter>
+  );
+}
 
 // /admin is create/edit/delete sessions + CRUD players — ADMIN-tier, not
 // MANAGER. Hidden rather than greyed for anyone below that.

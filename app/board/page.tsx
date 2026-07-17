@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useActor } from '@/lib/client-identity';
-import { WhoAmI, PageFooter } from '../shared-ui';
+import { WhoAmI, AppNav } from '../shared-ui';
 import { labelForBand, BAND_MIN_GAMES, type SkillBand } from '@/lib/skill-band';
 import type { BoardData, BoardMember } from '@/lib/firestore';
 
@@ -299,11 +299,7 @@ export default function BoardPage() {
 
       <div className="mt-6" />
 
-      <PageFooter border={false}>
-        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
-          <Link href="/me" className="underline">Go to your page →</Link>
-        </div>
-      </PageFooter>
+      <AppNav current="board" />
     </main>
   );
 }

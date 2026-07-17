@@ -147,7 +147,10 @@ export default function CheckinPage() {
       {loading || sessionLoading ? (
         <p className="text-line-400">Loading…</p>
       ) : !session ? (
-        <p className="text-line-400">No session yet. Create one at /admin/session/new.</p>
+        <p className="text-line-400">
+          No session yet.{' '}
+          <Link href="/admin/session/new" className="underline text-line-000">Create one</Link>.
+        </p>
       ) : (
         <>
           <p className="mb-4 text-[13px] text-line-400">
@@ -157,7 +160,8 @@ export default function CheckinPage() {
           {renderGrid(roster)}
           {roster.length === 0 && (
             <p className="text-[13px] text-line-400">
-              Nobody in the roster yet. Add people at /admin/players first.
+              Nobody in the roster yet.{' '}
+              <Link href="/admin/players" className="underline text-line-000">Add people</Link> first.
             </p>
           )}
 
