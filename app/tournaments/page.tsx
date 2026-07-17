@@ -45,10 +45,10 @@ export default function TournamentsPage() {
                   {t.status === 'LIVE' ? (
                     <span className="flex items-center gap-1.5 text-live">
                       <span className="inline-block h-[7px] w-[7px] rounded-full bg-live" />
-                      LIVE
+                      Live
                     </span>
                   ) : t.status === 'DONE' ? (
-                    <span className="text-line-700">DONE</span>
+                    <span className="text-line-700">Done</span>
                   ) : (
                     <span className="text-line-400">upcoming</span>
                   )}
