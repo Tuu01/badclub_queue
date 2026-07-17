@@ -115,7 +115,7 @@ export default function MePage() {
           </p>
         ) : (
           <p className="mt-2 text-[15px] text-line-000">
-            You&apos;ve played with everyone you&apos;ve been at a session with.
+            You’ve played with everyone you’ve been at a session with.
           </p>
         )}
       </section>

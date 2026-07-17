@@ -73,7 +73,7 @@ function MixingTab({ members, myId }: { members: BoardMember[]; myId: string | u
   });
   return (
     <div>
-      <p className="px-4 pb-3 text-[13px] text-line-400">Different people you&apos;ve partnered with, ever.</p>
+      <p className="px-4 pb-3 text-[13px] text-line-400">Different people you’ve partnered with, ever.</p>
       <ul>
         {sorted.map(m => (
           <Row
@@ -134,7 +134,7 @@ function SkillTab({ data, myId }: { data: BoardData; myId: string | undefined })
   return (
     <div className="space-y-5 px-4 py-4">
       <p className="text-[13px] text-line-400">
-        Grouped by level, not ranked — two people in a band aren&apos;t ordered. Dimmed names are still
+        Grouped by level, not ranked — two people in a band aren’t ordered. Dimmed names are still
         provisional (the level can still move).
       </p>
 
@@ -209,7 +209,7 @@ function ImprovementTab({ data }: { data: BoardData }) {
         </p>
 
         <p className="mt-3 text-[13px] text-line-400">
-          Unlike Skill, anyone can top this board — it isn&apos;t who&apos;s best, it&apos;s who improved most.
+          Unlike Skill, anyone can top this board — it isn’t who’s best, it’s who improved most.
         </p>
       </div>
 

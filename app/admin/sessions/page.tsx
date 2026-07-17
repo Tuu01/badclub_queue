@@ -241,7 +241,7 @@ function AllSessionsPageInner() {
                 {deleteConfirmId === s.id && (
                   <div className="space-y-2 border-t border-line-700 bg-court-800 p-3">
                     <p className="text-[13px] text-line-400">
-                      Delete this session ({formatPlayDate(s.date)}) permanently? This can&apos;t be undone
+                      Delete this session ({formatPlayDate(s.date)}) permanently? This can’t be undone
                       {s.status !== 'DRAFT' ? ' — every recorded match for it goes with it.' : '.'}
                     </p>
                     <input

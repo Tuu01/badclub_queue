@@ -41,7 +41,7 @@ function MixingTeaser({ actor }: { actor: { id: string; name: string } }) {
   if (!data || data.possible === 0) return null;
   return (
     <div className="space-y-1 text-center text-[13px] text-line-400">
-      <p>🤝 You&apos;ve played with {data.partners} of {data.possible} people</p>
+      <p>🤝 You’ve played with {data.partners} of {data.possible} people</p>
       {data.streak > 0 && <p>🔥 {data.streak} session{data.streak === 1 ? '' : 's'} in a row</p>}
     </div>
   );
@@ -167,7 +167,7 @@ export default function HomePage() {
       <TopBar current="home" />
       <div className="mb-6 text-center">
         <p className="font-display text-2xl" style={{ fontStretch: '115%' }}>Badminton Queue</p>
-        <p className="mt-1 text-[13px] text-line-400">Fair matches and who&apos;s up next — every Saturday.</p>
+        <p className="mt-1 text-[13px] text-line-400">Fair matches and who’s up next — every Saturday.</p>
       </div>
 
       {/* Phase 5 (Refined Dark): the session status lives in its own card
@@ -176,7 +176,7 @@ export default function HomePage() {
       <section className="mx-auto w-full max-w-sm">
         {liveConflict ? (
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-line-700 bg-court-800 p-5 text-center">
-            <p className="text-[13px] font-medium text-signal">⚠ Two sessions are live — that&apos;s a bug.</p>
+            <p className="text-[13px] font-medium text-signal">⚠ Two sessions are live — that’s a bug.</p>
             <Link href="/session" className={`text-[13px] text-line-000 underline ${TAP}`}>See /session</Link>
           </div>
         ) : session?.status === 'LIVE' ? (
@@ -187,7 +187,7 @@ export default function HomePage() {
             </p>
             {actor && (
               checkedIn ? (
-                <p className="text-[13px] text-line-000">✓ You&apos;re checked in tonight</p>
+                <p className="text-[13px] text-line-000">✓ You’re checked in tonight</p>
               ) : (
                 <p className="text-[13px] text-line-400">
                   {canManage

@@ -554,7 +554,7 @@ export default function SessionPage() {
           <Link href="/" className="text-[13px] text-line-400">← Home</Link>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
-          <p className="text-line-400">Nobody&apos;s checked in yet</p>
+          <p className="text-line-400">Nobody’s checked in yet</p>
           {canManage ? (
             <>
               <Link
@@ -566,7 +566,7 @@ export default function SessionPage() {
               {endConfirming ? (
                 <div className="w-full max-w-xs space-y-2 rounded-xl border border-line-700 bg-court-800 p-3 text-left">
                   <p className="text-[13px] text-line-400">
-                    End this session? Nobody&apos;s checked in — nothing is lost.
+                    End this session? Nobody’s checked in — nothing is lost.
                   </p>
                   {endError && <p className="text-[13px] text-signal">{endError}</p>}
                   <div className="flex gap-2">
@@ -642,7 +642,7 @@ export default function SessionPage() {
       </p>
 
       {stale && (
-        <p className="px-4 pb-2 text-[13px] text-signal">Offline. What you&apos;re seeing is stale.</p>
+        <p className="px-4 pb-2 text-[13px] text-signal">Offline. What you’re seeing is stale.</p>
       )}
 
       {/* hero — this is where the strip lives once it "becomes the hero"
@@ -659,14 +659,14 @@ export default function SessionPage() {
         ) : myQueueIdx >= 0 ? (
           <>
             <p className="text-[11px] font-medium text-line-400">
-              you&apos;re {myQueueIdx + 1}{ordinalSuffix(myQueueIdx + 1)} in line
+              you’re {myQueueIdx + 1}{ordinalSuffix(myQueueIdx + 1)} in line
             </p>
             <p className="tabular font-display text-[44px] font-medium text-line-000" style={{ fontStretch: '120%' }}>
               {Math.round(queue[myQueueIdx].waitMs / 60_000)} min
             </p>
           </>
         ) : (
-          <p className="text-line-400">Not present in today&apos;s session</p>
+          <p className="text-line-400">Not present in today’s session</p>
         )}
       </section>
 

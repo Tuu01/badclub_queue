@@ -68,7 +68,7 @@ function FirstRunChecklist() {
             </>
           ) : (
             <>
-              <Link href="/admin/session/new" className="underline text-line-000">Create this week&apos;s session</Link>.
+              <Link href="/admin/session/new" className="underline text-line-000">Create this week’s session</Link>.
             </>
           )}
         </ChecklistStep>
@@ -112,7 +112,7 @@ function RecalculateCard() {
     <div className="rounded-xl border border-line-700 p-4">
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Recalculate everything</p>
       <p className="mt-1 text-[13px] text-line-400">
-        Replays every non-VOID session from each player&apos;s seed and rewrites all ratings and pair
+        Replays every non-VOID session from each player’s seed and rewrites all ratings and pair
         history. Use after VOIDing a session, or after a rating-formula change. Safe to run any time.
       </p>
       {!confirming ? (
@@ -201,8 +201,8 @@ function ManagerRiskCalculator() {
     <div className="rounded-xl border border-line-700 p-4">
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Manager code</p>
       <p className="mt-1 text-[13px] text-line-400">
-        The code isn&apos;t tied to a person — there&apos;s no way to count who actually holds it.
-        Enter how many people you&apos;ve given it to.
+        The code isn’t tied to a person — there’s no way to count who actually holds it.
+        Enter how many people you’ve given it to.
       </p>
       <div className="mt-3 flex items-center gap-3">
         <input
@@ -216,7 +216,7 @@ function ManagerRiskCalculator() {
       </div>
       <p className="mt-3 text-[13px] text-line-000">
         With {present} {present === 1 ? 'person' : 'people'} and {courts} court{courts === 1 ? '' : 's'} ({playing} playing at once):
-        at any moment there&apos;s a <span className="font-medium">{pct}%</span> chance every manager is on
+        at any moment there’s a <span className="font-medium">{pct}%</span> chance every manager is on
         court and nobody can record a result.
       </p>
       <p className="mt-1 text-[13px] text-line-400">

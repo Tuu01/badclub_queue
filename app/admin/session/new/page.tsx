@@ -242,7 +242,7 @@ function NewSessionPageInner() {
           confirmDelete ? (
             <div className="space-y-2 rounded-xl border border-line-700 p-3">
               <p className="text-[13px] text-line-400">
-                Delete this draft ({playDate})? Nobody has checked in, so nothing is lost — but it can&apos;t be undone.
+                Delete this draft ({playDate})? Nobody has checked in, so nothing is lost — but it can’t be undone.
               </p>
               <div className="flex gap-2">
                 <button

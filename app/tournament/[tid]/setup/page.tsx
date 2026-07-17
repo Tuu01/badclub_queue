@@ -93,7 +93,7 @@ function Inner({ tid }: { tid: string }) {
       </div>
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Set up teams</p>
       <p className="text-[13px] text-line-400">
-        Pick a team, then tap players into it. Tap again to remove. Draw the teams yourself — the app doesn&apos;t.
+        Pick a team, then tap players into it. Tap again to remove. Draw the teams yourself — the app doesn’t.
       </p>
 
       {/* team selector */}

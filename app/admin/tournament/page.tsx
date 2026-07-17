@@ -134,7 +134,7 @@ function Inner() {
                     {deleteId === t.id && (
                       <div className="space-y-2 border-t border-line-700 bg-court-800 p-3">
                         <p className="text-[13px] text-line-400">
-                          Delete <span className="text-line-000">{t.name}</span> permanently? This can&apos;t be undone
+                          Delete <span className="text-line-000">{t.name}</span> permanently? This can’t be undone
                           {t.imported || t.teamsFinalized ? ' — every recorded game goes with it.' : '.'}
                         </p>
                         <input

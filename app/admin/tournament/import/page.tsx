@@ -52,7 +52,7 @@ function ImportInner() {
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Import tournament</p>
       <p className="text-[13px] text-line-400">
         Paste the exported JSON. Preview shows exactly what it will create. Import is idempotent by
-        name + date — running it twice won&apos;t duplicate. Tournament data never affects skill ratings.
+        name + date — running it twice won’t duplicate. Tournament data never affects skill ratings.
       </p>
 
       <textarea

@@ -44,7 +44,7 @@ export default function SessionsPage() {
       {sessions === null ? (
         <p className="text-[13px] text-line-400">Loading…</p>
       ) : sessions.length === 0 ? (
-        <p className="text-[13px] text-line-400">No sessions yet — they&apos;ll show here after the first one.</p>
+        <p className="text-[13px] text-line-400">No sessions yet — they’ll show here after the first one.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {sessions.map(s => {
