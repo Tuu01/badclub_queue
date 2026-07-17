@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useActor } from '@/lib/client-identity';
-import { WhoAmI, AppNav } from '../shared-ui';
+import { AppNav, TopBar } from '../shared-ui';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
 interface TItem { id: string; name: string; date: string; status: string; teamsFinalized: boolean; imported: boolean; }
@@ -11,7 +10,6 @@ interface TItem { id: string; name: string; date: string; status: string; teamsF
 // PLAYER-tier — view-only discovery, reached from the home footer.
 // Tapping a tournament opens its standings/live view at /tournament/[id].
 export default function TournamentsPage() {
-  const actor = useActor();
   const [list, setList] = useState<TItem[] | null>(null);
 
   useEffect(() => {
@@ -22,10 +20,7 @@ export default function TournamentsPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col space-y-4 bg-court-900 px-4 py-6 text-line-000">
-      <div className="flex items-center justify-between">
-        {actor && <WhoAmI name={actor.name} short />}
-        <Link href="/" className="text-[13px] text-line-400">← Home</Link>
-      </div>
+      <TopBar current="tournaments" />
       <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Tournaments</p>
 
       {list === null ? (
@@ -59,7 +54,7 @@ export default function TournamentsPage() {
         </ul>
       )}
 
-      <AppNav current="tournaments" />
+      <AppNav current="tournaments" showRole={false} />
     </main>
   );
 }

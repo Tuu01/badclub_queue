@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useActor } from '@/lib/client-identity';
-import { WhoAmI, AppNav } from '../shared-ui';
+import { AppNav, TopBar } from '../shared-ui';
 import { labelForBand, BAND_MIN_GAMES, type SkillBand } from '@/lib/skill-band';
 import type { BoardData, BoardMember } from '@/lib/firestore';
 
@@ -252,10 +252,7 @@ export default function BoardPage() {
   return (
     <main className="flex min-h-dvh flex-col bg-court-900 pb-10 text-line-000">
       <header className="px-4 pt-6 pb-2">
-        <div className="flex items-center justify-between">
-          {actor && <WhoAmI name={actor.name} short />}
-          <Link href="/" className="text-[13px] text-line-400">← Home</Link>
-        </div>
+        <TopBar current="board" />
         <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>Board</p>
       </header>
 
@@ -299,7 +296,7 @@ export default function BoardPage() {
 
       <div className="mt-6" />
 
-      <AppNav current="board" />
+      <AppNav current="board" showRole={false} />
     </main>
   );
 }
