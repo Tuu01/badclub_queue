@@ -37,8 +37,34 @@ const NAV_ITEMS = [
 // PageFooter with their own contextual bits — the Session screen's End
 // session / Check people in and its end-confirm block — drop this row in
 // and pass those actions via `extra`, so there's still ONE nav definition.
-export function AppNavRow({ current, extra }: { current?: string; extra?: ReactNode }) {
+// The role/account cluster — Organiser (sign-in or hub) + Log out. ONE
+// definition, used both in the footer nav and top-right on the home screen,
+// so they can never drift. `·`-separated to sit inline in either place.
+export function RoleControls({ current }: { current?: string }) {
   const role = useRole();
+  const sep = <span aria-hidden className="text-line-700">·</span>;
+  if (role === 'ADMIN') {
+    return (
+      <>
+        <Link href="/admin" className={current === 'admin' ? 'font-medium text-line-000' : 'underline'}>Organiser</Link>
+        {sep}
+        <button type="button" onClick={() => clearCode()} className="underline">Log out</button>
+      </>
+    );
+  }
+  if (role === 'MANAGER') {
+    return (
+      <>
+        <span className="text-line-400">Manager</span>
+        {sep}
+        <button type="button" onClick={() => clearCode()} className="underline">Log out</button>
+      </>
+    );
+  }
+  return <button type="button" onClick={() => void enterCode()} className="underline">Organiser sign-in</button>;
+}
+
+export function AppNavRow({ current, extra, showRole = true }: { current?: string; extra?: ReactNode; showRole?: boolean }) {
   const sep = <span aria-hidden className="text-line-700">·</span>;
   return (
     <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
@@ -51,30 +77,15 @@ export function AppNavRow({ current, extra }: { current?: string; extra?: ReactN
         </Fragment>
       ))}
       {extra ? <>{sep}{extra}</> : null}
-      {sep}
-      {role === 'ADMIN' ? (
-        <>
-          <Link href="/admin" className={current === 'admin' ? 'font-medium text-line-000' : 'underline'}>Organiser</Link>
-          {sep}
-          <button type="button" onClick={() => clearCode()} className="underline">Log out</button>
-        </>
-      ) : role === 'MANAGER' ? (
-        <>
-          <span className="text-line-400">Manager mode</span>
-          {sep}
-          <button type="button" onClick={() => clearCode()} className="underline">Log out</button>
-        </>
-      ) : (
-        <button type="button" onClick={() => void enterCode()} className="underline">Organiser sign-in</button>
-      )}
+      {showRole && <>{sep}<RoleControls current={current} /></>}
     </nav>
   );
 }
 
-export function AppNav({ current }: { current?: string }) {
+export function AppNav({ current, showRole }: { current?: string; showRole?: boolean }) {
   return (
     <PageFooter border={false}>
-      <AppNavRow current={current} />
+      <AppNavRow current={current} showRole={showRole} />
     </PageFooter>
   );
 }
