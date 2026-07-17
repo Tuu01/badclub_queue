@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import { useState, useRef, Fragment, type ChangeEvent } from 'react';
 import { useRole } from '@/lib/client-role';
+import { useActiveSession } from '@/lib/use-active-session';
 import { enterCode, clearCode, writeFetch } from '@/lib/client-code';
 import { clearActor } from '@/lib/client-identity';
 import { usePhotos } from '@/lib/use-photos';
@@ -64,10 +65,17 @@ export function RoleControls({ current }: { current?: string }) {
 }
 
 export function AppNavRow({ current, showRole = true }: { current?: string; showRole?: boolean }) {
+  const { session } = useActiveSession();
   const sep = <span aria-hidden className="text-line-700">·</span>;
+
+  // "Session" only appears while one is live — otherwise it'd link to an
+  // empty screen. Slotted right after Home so it reads as the live thing.
+  const items: Array<{ key: string; href: string; label: string }> = [...NAV_ITEMS];
+  if (session?.status === 'LIVE') items.splice(1, 0, { key: 'session', href: '/session', label: 'Session' });
+
   return (
     <nav className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-4 py-4 text-[13px] text-line-400">
-      {NAV_ITEMS.map((item, i) => (
+      {items.map((item, i) => (
         <Fragment key={item.key}>
           {i > 0 && sep}
           {item.key === current
