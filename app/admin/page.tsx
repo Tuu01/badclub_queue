@@ -1,14 +1,84 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useActiveSession } from '@/lib/use-active-session';
+import { usePlayers } from '@/lib/use-players';
 import { writeFetch } from '@/lib/client-code';
 import { useActor } from '@/lib/client-identity';
 import { WhoAmI } from '../shared-ui';
 import { AdminGate } from './admin-gate';
 
 const TAP = 'transition-transform duration-75 active:scale-[0.98]';
+
+// The setup path, spelled out. A first-time organiser had no idea what
+// order to do things in (rank players? create a session? where?). This
+// shows the three steps with their REAL status, so it doubles as a weekly
+// "have I created this week's session yet?" reminder once set up.
+function ChecklistStep({ done, children }: { done: boolean; children: ReactNode }) {
+  return (
+    <li className="flex items-start gap-2.5 text-[14px] leading-snug">
+      <span
+        className={`mt-px grid h-[18px] w-[18px] flex-none place-items-center rounded-full text-[11px] ${
+          done ? 'bg-line-000 text-court-900' : 'border border-line-700 text-transparent'
+        }`}
+      >
+        ✓
+      </span>
+      <span className={done ? 'text-line-400' : 'text-line-000'}>{children}</span>
+    </li>
+  );
+}
+
+function FirstRunChecklist() {
+  const { players } = usePlayers();
+  const { session } = useActiveSession();
+  const roster = players.filter(p => p.active && !p.isGuest);
+  const hasPlayers = roster.length > 0;
+  const live = session?.status === 'LIVE';
+  const hasSession = live || session?.status === 'DRAFT';
+
+  return (
+    <div className="rounded-xl border border-line-700 p-4">
+      <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Get set up</p>
+      <p className="mt-1 text-[13px] text-line-400">Three steps to run a session.</p>
+      <ol className="mt-3 space-y-2.5">
+        <ChecklistStep done={hasPlayers}>
+          {hasPlayers ? (
+            <>
+              <span className="font-medium text-line-000">{roster.length} players</span> in the roster.{' '}
+              <Link href="/admin/players" className="underline">Add or rank →</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/admin/players" className="underline text-line-000">Add your players</Link> and rank them by skill.
+            </>
+          )}
+        </ChecklistStep>
+        <ChecklistStep done={!!hasSession}>
+          {live ? (
+            <>
+              <span className="font-medium text-line-000">Session is live.</span>{' '}
+              <Link href="/session" className="underline">Open it →</Link>
+            </>
+          ) : hasSession ? (
+            <>
+              Session is ready to start.{' '}
+              <Link href="/admin/sessions" className="underline">Manage →</Link>
+            </>
+          ) : (
+            <>
+              <Link href="/admin/session/new" className="underline text-line-000">Create this week&apos;s session</Link>.
+            </>
+          )}
+        </ChecklistStep>
+        <ChecklistStep done={!!live}>
+          On the day: check people in, tap <span className="text-line-000">Start</span>, and the app runs the queue.
+        </ChecklistStep>
+      </ol>
+    </div>
+  );
+}
 
 // "Recalculate everything" — replays every non-VOID session from seed.
 // Idempotent, so safe to run any time. This is the escape hatch for
@@ -169,6 +239,8 @@ export default function AdminHubPage() {
           <Link href="/" className="text-[13px] text-line-400">← Home</Link>
         </div>
         <p className="font-display text-xl" style={{ fontStretch: '115%' }}>Admin</p>
+
+        <FirstRunChecklist />
 
         <Card href="/admin/sessions" title="Sessions" subtitle="Create a session, or view every session by date." />
         <Card href="/admin/players" title="Players" subtitle="Manage the club roster and rank players by skill." />
