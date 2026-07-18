@@ -42,8 +42,3 @@ next-env.d.ts
 
 .vercel
 .env*
-
-# Design-skill tooling (nutlope/hallmark, installed via `npx skills add`)
-.agents/
-.claude/
-skills-lock.json
