@@ -1863,3 +1863,37 @@ export async function setPhoto(
 export async function clearPhoto(db: Db, clubId: string, playerId: PlayerId): Promise<void> {
   await db.doc(`clubs/${clubId}/photos/${playerId}`).delete();
 }
+
+// ============================================================
+// PERSONAL RATING — a player's OWN number, for their OWN eyes.
+//
+// Owner decision (2026-07): show a provisional rating to motivate play
+// ("see your number, want it higher"). This is a deliberate, scoped
+// relaxation of LEADERBOARD.md's "no number before convergence" rule —
+// but ONLY the personal view. It is served per-player (/api/me/rating),
+// so nobody else's raw number leaks; the PUBLIC board still shows bands
+// only. `converged=false` → the UI labels it "provisional".
+//
+// The number means little until the admin has ranked players (seedMu),
+// after which it reflects real judgment + early game adjustments.
+// ============================================================
+
+export async function getPlayerRating(
+  db: Db, clubId: string, playerId: PlayerId,
+): Promise<{ mu: number; sigma: number; gamesTotal: number; converged: boolean } | null> {
+  const [ratingsSnap, playerSnap] = await Promise.all([
+    db.doc(`clubs/${clubId}/private/ratings`).get(),
+    db.doc(`clubs/${clubId}/players/${playerId}`).get(),
+  ]);
+  if (!playerSnap.exists) return null;
+  const player = playerSnap.data() as PublicPlayerDoc;
+  const ratings = (ratingsSnap.data() as RatingsDoc | undefined)?.ratings ?? {};
+  const r = ratings[playerId] ?? { mu: 50, sigma: SIGMA_INIT };
+  const gamesTotal = player.gamesTotal ?? 0;
+  return {
+    mu: r.mu,
+    sigma: r.sigma,
+    gamesTotal,
+    converged: isConverged({ sigma: r.sigma, gamesTotal } as ClubPlayer),
+  };
+}

@@ -19,11 +19,29 @@ function Bar({ frac }: { frac: number }) {
   );
 }
 
+// Your OWN rating — a game-like number to grind. Provisional-labelled until
+// it settles (see getPlayerRating). Only ever your own; others see bands.
+function RatingCard({ rating }: { rating: { number: number; provisional: boolean } | null }) {
+  if (!rating) return null;
+  return (
+    <section className="mt-6 rounded-2xl border border-line-700 bg-court-800 p-5 text-center">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-line-400">Your rating</p>
+      <p className="tabular mt-1 font-display text-[46px] font-medium leading-none text-line-000" style={{ fontStretch: '110%' }}>
+        {rating.number}
+      </p>
+      {rating.provisional && (
+        <p className="mt-2 text-[13px] text-line-400">Provisional — it settles as you play more.</p>
+      )}
+    </section>
+  );
+}
+
 export default function MePage() {
   const actor = useActor();
   const [data, setData] = useState<BoardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [trophies, setTrophies] = useState<TrophyLine[]>([]);
+  const [rating, setRating] = useState<{ number: number; provisional: boolean; gamesTotal: number } | null>(null);
 
   useEffect(() => {
     fetch('/api/board')
@@ -38,6 +56,10 @@ export default function MePage() {
     fetch(`/api/me/trophies?playerId=${actor.id}`)
       .then(res => res.json())
       .then(body => { if (!cancelled) setTrophies(body.trophies ?? []); })
+      .catch(() => {});
+    fetch(`/api/me/rating?playerId=${actor.id}`)
+      .then(res => res.json())
+      .then(body => { if (!cancelled) setRating(body.rating ?? null); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [actor]);
@@ -63,6 +85,7 @@ export default function MePage() {
         <TopBar current="me" />
         <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>{actor.name}</p>
         <div className="mt-6"><MyPhotoCard actor={actor} /></div>
+        <RatingCard rating={rating} />
         <p className="mt-6 text-[13px] text-line-400">No stats yet — come back after a few sessions.</p>
         <AppNav current="me" showRole={false} />
       </main>
@@ -75,6 +98,8 @@ export default function MePage() {
       <p className="mt-2 font-display text-xl" style={{ fontStretch: '115%' }}>{actor.name}</p>
 
       <div className="mt-6"><MyPhotoCard actor={actor} /></div>
+
+      <RatingCard rating={rating} />
 
       {/* Tournaments — permanent, never expires, never decays. Computed
           on read from the games. Champion lines lead. */}
