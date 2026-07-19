@@ -178,16 +178,20 @@ function AllSessionsPageInner() {
 
             return (
               <li key={s.id}>
-                <div className="flex items-center justify-between gap-2 px-4 py-3">
-                  <div className="min-w-0">
+                {/* Stacked, not side-by-side: on a phone the date used to wrap
+                    mid-word while the five actions squeezed against it. Date +
+                    status on one line, the meta under it, actions on their own
+                    wrapping row. */}
+                <div className="px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
                     <p className="font-display text-[17px]" style={{ fontStretch: '105%' }}>{formatPlayDate(s.date)}</p>
-                    <p className="text-[13px] text-line-400">
-                      {s.courtCount} court{s.courtCount === 1 ? '' : 's'} · {playerCount} in roster
-                      {s.status === 'LIVE' || s.status === 'DONE' ? ` · ${attendanceCount} checked in` : ''}
-                    </p>
+                    <span className="shrink-0 text-[13px] font-medium"><StatusLabel status={s.status} /></span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 text-[13px] font-medium">
-                    <StatusLabel status={s.status} />
+                  <p className="mt-0.5 text-[13px] text-line-400">
+                    {s.courtCount} court{s.courtCount === 1 ? '' : 's'} · {playerCount} in roster
+                    {s.status === 'LIVE' || s.status === 'DONE' ? ` · ${attendanceCount} checked in` : ''}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-medium">
                     {s.status === 'LIVE' && <Link href="/session" className={`text-line-400 underline ${TAP}`}>Open</Link>}
                     {s.status === 'DRAFT' && <Link href="/admin/session/new" className={`text-line-400 underline ${TAP}`}>Edit</Link>}
                     {(s.status === 'LIVE' || s.status === 'DONE') && (
