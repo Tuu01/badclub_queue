@@ -13,7 +13,7 @@ runs off a single tap — because the person organising is also playing.
 </tr>
 </table>
 
-### 🏸 [Try the live demo →](https://badclub-queue-demo.vercel.app)
+### 🏸 [Try the live demo →](https://vlong.tuuhyped.co.uk)
 
 A real deployment on a seeded club — **every name in it is fictional**. Pick any
 name to see the queue from that player's point of view, or sign in as an

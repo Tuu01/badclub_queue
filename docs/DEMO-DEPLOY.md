@@ -1,16 +1,24 @@
 # The demo deployment
 
-`badclub-queue-demo.vercel.app` is a **separate** Vercel project against a
-**separate** Firebase project, seeded with fictional players. It shares nothing
-with the club's live deployment — different project, different database,
-different credentials.
+The public demo is a **separate** Vercel project against a **separate** Firebase
+project, seeded with fictional players. It shares nothing with the club's live
+deployment — different project, different database, different credentials.
 
-| | Live club | Public demo |
+| | Public demo | Live club |
 |---|---|---|
-| Vercel project | `badclub-vlong` | `badclub-queue-demo` |
-| Firebase project | `badclub-vlong` | `badclub-queue-demo` |
-| Data | Real members | 30 fictional players |
-| Access codes | Private | `demo-mgr` / `demo-adm`, published |
+| URL | `vlong.tuuhyped.co.uk` (also `badclub-queue-demo.vercel.app`) | `badclub-vlong.vercel.app` |
+| Vercel project | `badclub-queue-demo` | `badclub-vlong` |
+| Firebase project | `badclub-queue-demo` | `badclub-vlong` |
+| Data | 30 fictional players | Real members |
+| Access codes | `demo-mgr` / `demo-adm`, published | Private |
+
+The custom domain points at the **demo**, so the public link shows fictional
+data. The club's own app keeps running on its Vercel URL against the real
+database — the two were never merged, and moving the domain back is one command:
+
+```bash
+npx vercel domains add vlong.tuuhyped.co.uk badclub-vlong --force
+```
 
 ## Re-seeding it
 
