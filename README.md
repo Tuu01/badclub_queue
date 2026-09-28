@@ -28,8 +28,11 @@ The interesting thing to try: open a suggested court, read the sentence
 explaining *why* those four, then tap **Take court** and watch the queue
 re-order.
 
-▶ **[24-second demo video](docs/media/demo.mp4)** · the screenshots below are the
-real app running against that same seeded data
+[![Watch the 24-second demo](docs/media/demo-poster.jpg)](https://vlong.tuuhyped.co.uk/demo.mp4)
+
+▶ **[Watch the 24-second demo](https://vlong.tuuhyped.co.uk/demo.mp4)** — plays in
+the browser. The screenshots below are the real app running against that same
+seeded data.
 
 ---
 
