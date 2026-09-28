@@ -1,24 +1,30 @@
 // ============================================================
-// seed-demo.cjs — fills the LOCAL FIRESTORE EMULATOR with a rich, fake club.
+// seed-demo.cjs — fills a DEMO Firestore with a rich, fake club.
 //
-// NEVER touches the real club: it refuses to run unless FIRESTORE_EMULATOR_HOST
-// is set, and it initialises its own Admin app with no credentials.
+// Two targets, and it will refuse anything else:
 //
-//   firebase emulators:start --only firestore        (terminal 1)
-//   FIRESTORE_EMULATOR_HOST=localhost:8080 node scripts/seed-demo.cjs
+//   A. the local emulator — set FIRESTORE_EMULATOR_HOST, no credentials needed
+//        firebase emulators:start --only firestore          (terminal 1)
+//        FIRESTORE_EMULATOR_HOST=localhost:8085 node scripts/seed-demo.cjs
+//
+//   B. a real project whose id ends in "-demo" — for the public demo
+//      deployment. Needs a service account:
+//        GOOGLE_APPLICATION_CREDENTIALS=./demo-sa.json \
+//        DEMO_PROJECT_ID=badclub-queue-demo node scripts/seed-demo.cjs
+//
+// THE GUARD: a real project id must end in "-demo". That is what makes it
+// impossible to point this at the club's live data by fat-fingering an env
+// var — the real project is `badclub-vlong`, which can never match. The
+// emulator path stays credential-free, so it cannot reach any real project
+// at all.
 //
 // Seeds: 30 players, spread ratings, pair history, 4 finished Saturdays,
 // and ONE live session mid-flow (2 courts playing, 1 free, a real queue).
+// Re-running wipes what it wrote first, so the demo can be reset any time.
 // ============================================================
 const fs = require('fs');
-const { initializeApp } = require('firebase-admin/app');
+const { initializeApp, applicationDefault } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-
-if (!process.env.FIRESTORE_EMULATOR_HOST) {
-  console.error('REFUSING TO RUN: FIRESTORE_EMULATOR_HOST is not set.');
-  console.error('This script only ever seeds the local emulator, never the real club.');
-  process.exit(1);
-}
 
 function readEnv(key) {
   try {
@@ -28,8 +34,34 @@ function readEnv(key) {
   } catch { return null; }
 }
 
-const PROJECT_ID = readEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID') || 'demo-badclub';
-initializeApp({ projectId: PROJECT_ID });
+const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST;
+const DEMO_PROJECT = process.env.DEMO_PROJECT_ID;
+
+let PROJECT_ID;
+if (EMULATOR) {
+  // Emulator: no credentials, so this cannot reach a real project.
+  PROJECT_ID = DEMO_PROJECT || readEnv('NEXT_PUBLIC_FIREBASE_PROJECT_ID') || 'demo-badclub';
+  initializeApp({ projectId: PROJECT_ID });
+} else if (DEMO_PROJECT) {
+  if (!/-demo$/.test(DEMO_PROJECT)) {
+    console.error(`REFUSING TO RUN: DEMO_PROJECT_ID="${DEMO_PROJECT}" does not end in "-demo".`);
+    console.error('This script only ever seeds a demo project or the local emulator.');
+    process.exit(1);
+  }
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.error('REFUSING TO RUN: DEMO_PROJECT_ID is set but GOOGLE_APPLICATION_CREDENTIALS is not.');
+    console.error('Point it at the demo project\'s service-account JSON.');
+    process.exit(1);
+  }
+  PROJECT_ID = DEMO_PROJECT;
+  initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
+} else {
+  console.error('REFUSING TO RUN: set FIRESTORE_EMULATOR_HOST (local) or DEMO_PROJECT_ID (a "-demo" project).');
+  console.error('This script never touches the real club.');
+  process.exit(1);
+}
+
+console.log(`seeding → ${EMULATOR ? `emulator ${EMULATOR}` : 'PROJECT'} :: ${PROJECT_ID}`);
 const db = getFirestore();
 
 const CLUB = 'default';
