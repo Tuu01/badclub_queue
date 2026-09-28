@@ -13,8 +13,23 @@ runs off a single tap — because the person organising is also playing.
 </tr>
 </table>
 
-▶ **[24-second demo video](docs/media/demo.mp4)** · screenshots are the real app
-running against seeded demo data
+### 🏸 [Try the live demo →](https://badclub-queue-demo.vercel.app)
+
+A real deployment on a seeded club — **every name in it is fictional**. Pick any
+name to see the queue from that player's point of view, or sign in as an
+organiser to actually run a court:
+
+| | code |
+|---|---|
+| Manager — take courts, record results, swap players, pause people | `demo-mgr` |
+| Admin — create sessions, edit the roster | `demo-adm` |
+
+The interesting thing to try: open a suggested court, read the sentence
+explaining *why* those four, then tap **Take court** and watch the queue
+re-order.
+
+▶ **[24-second demo video](docs/media/demo.mp4)** · the screenshots below are the
+real app running against that same seeded data
 
 ---
 
@@ -187,6 +202,7 @@ assert that exactly one survives.
 | [`USECASES.md`](USECASES.md) | 20 use cases from the real club |
 | [`LEADERBOARD.md`](LEADERBOARD.md) | Why most stats are deliberately *not* shown |
 | [`PROMPT.md`](PROMPT.md) | The original build spec |
+| [`docs/DEMO-DEPLOY.md`](docs/DEMO-DEPLOY.md) | How the public demo is isolated from the club's live data |
 
 ---
 
