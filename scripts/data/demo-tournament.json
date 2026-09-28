@@ -1,0 +1,753 @@
+{
+  "players": [
+    {
+      "name": "James Carter",
+      "gender": "M",
+      "div": 1,
+      "bio": "Smashes first, asks later"
+    },
+    {
+      "name": "Tom Bailey",
+      "gender": "M",
+      "div": 1,
+      "bio": "Here for the doubles and the debrief"
+    },
+    {
+      "name": "Ryan Mitchell",
+      "gender": "M",
+      "div": 1,
+      "bio": "Will retrieve anything"
+    },
+    {
+      "name": "Daniel Hughes",
+      "gender": "M",
+      "div": 1,
+      "bio": "Net play specialist"
+    },
+    {
+      "name": "Oliver Grant",
+      "gender": "M",
+      "div": 1,
+      "bio": "Brings the shuttles"
+    },
+    {
+      "name": "Marcus Webb",
+      "gender": "M",
+      "div": 1,
+      "bio": "Drop shots and dad jokes"
+    },
+    {
+      "name": "Sam Whitfield",
+      "gender": "M",
+      "div": 1,
+      "bio": "Runs on coffee"
+    },
+    {
+      "name": "Ethan Brooks",
+      "gender": "M",
+      "div": 1,
+      "bio": "Undefeated at warm-ups"
+    },
+    {
+      "name": "Luke Harding",
+      "gender": "M",
+      "div": 1,
+      "bio": "Serves like a metronome"
+    },
+    {
+      "name": "Adam Foster",
+      "gender": "M",
+      "div": 1,
+      "bio": "Plays every Saturday, rain or shine"
+    },
+    {
+      "name": "Emily Hart",
+      "gender": "F",
+      "div": 1,
+      "bio": "The queue is sacred"
+    },
+    {
+      "name": "Sophie Lawson",
+      "gender": "F",
+      "div": 1,
+      "bio": "Left-handed, deal with it"
+    },
+    {
+      "name": "Grace Bennett",
+      "gender": "F",
+      "div": 1,
+      "bio": "Once won a rally that lasted 47 shots"
+    },
+    {
+      "name": "Chloe Ramsey",
+      "gender": "F",
+      "div": 1,
+      "bio": "Doubles only, knees permitting"
+    },
+    {
+      "name": "Nathan Price",
+      "gender": "M",
+      "div": 2,
+      "bio": "Shuttle whisperer"
+    },
+    {
+      "name": "Chris Donnelly",
+      "gender": "M",
+      "div": 2,
+      "bio": "Always up for one more game"
+    },
+    {
+      "name": "Ben Marsh",
+      "gender": "M",
+      "div": 2,
+      "bio": "Backhand under construction"
+    },
+    {
+      "name": "Jack Turnbull",
+      "gender": "M",
+      "div": 2,
+      "bio": "Turns up early, leaves last"
+    },
+    {
+      "name": "Owen Fletcher",
+      "gender": "M",
+      "div": 2,
+      "bio": "Lives for the decider"
+    },
+    {
+      "name": "Alex Nolan",
+      "gender": "M",
+      "div": 2,
+      "bio": "Quietly competitive"
+    },
+    {
+      "name": "Josh Kerrigan",
+      "gender": "M",
+      "div": 2,
+      "bio": "Coaches from the sideline"
+    },
+    {
+      "name": "Liam Ashworth",
+      "gender": "M",
+      "div": 2,
+      "bio": "Smash then apologise"
+    },
+    {
+      "name": "Toby Vaughan",
+      "gender": "M",
+      "div": 2,
+      "bio": "Retired from singles"
+    },
+    {
+      "name": "Elliot Shaw",
+      "gender": "M",
+      "div": 2,
+      "bio": "Will play anyone"
+    },
+    {
+      "name": "Hannah Fielding",
+      "gender": "F",
+      "div": 2,
+      "bio": "Keeps score properly"
+    },
+    {
+      "name": "Amy Sinclair",
+      "gender": "F",
+      "div": 2,
+      "bio": "Warms up for 20 minutes"
+    },
+    {
+      "name": "Laura Prescott",
+      "gender": "F",
+      "div": 2,
+      "bio": "Deceptive as anything"
+    },
+    {
+      "name": "Megan Doyle",
+      "gender": "F",
+      "div": 2,
+      "bio": "Plays best after 9pm"
+    },
+    {
+      "name": "Katie Bright",
+      "gender": "F",
+      "div": 2,
+      "bio": "Net cord apologist"
+    },
+    {
+      "name": "Rachel Vance",
+      "gender": "F",
+      "div": 2,
+      "bio": "Here to mix it up"
+    }
+  ],
+  "tournament": {
+    "name": "Demo Club Summer Cup 2026",
+    "date": "2026-07-04",
+    "venue": "Demo Sports Centre",
+    "courtCount": 4,
+    "format": "round-robin, 6 games per team pair",
+    "teams": [
+      {
+        "id": "t1",
+        "name": "Team 1",
+        "players": [
+          "James Carter",
+          "Ethan Brooks",
+          "Luke Harding",
+          "Chris Donnelly",
+          "Ben Marsh",
+          "Elliot Shaw",
+          "Hannah Fielding"
+        ]
+      },
+      {
+        "id": "t2",
+        "name": "Team 2",
+        "players": [
+          "Tom Bailey",
+          "Sam Whitfield",
+          "Adam Foster",
+          "Nathan Price",
+          "Jack Turnbull",
+          "Toby Vaughan",
+          "Amy Sinclair"
+        ]
+      },
+      {
+        "id": "t3",
+        "name": "Team 3",
+        "players": [
+          "Ryan Mitchell",
+          "Marcus Webb",
+          "Emily Hart",
+          "Chloe Ramsey",
+          "Owen Fletcher",
+          "Liam Ashworth",
+          "Laura Prescott",
+          "Rachel Vance"
+        ]
+      },
+      {
+        "id": "t4",
+        "name": "Team 4",
+        "players": [
+          "Daniel Hughes",
+          "Oliver Grant",
+          "Sophie Lawson",
+          "Grace Bennett",
+          "Alex Nolan",
+          "Josh Kerrigan",
+          "Megan Doyle",
+          "Katie Bright"
+        ]
+      }
+    ]
+  },
+  "games": [
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 2",
+      "pairA": [
+        "Elliot Shaw",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Tom Bailey",
+        "Sam Whitfield"
+      ],
+      "winner": "B",
+      "scoreLoser": 16
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 2",
+      "pairA": [
+        "Luke Harding",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Jack Turnbull",
+        "Nathan Price"
+      ],
+      "winner": "A",
+      "scoreLoser": 18
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 2",
+      "pairA": [
+        "Ben Marsh",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Nathan Price",
+        "Amy Sinclair"
+      ],
+      "winner": "A",
+      "scoreLoser": 17
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 2",
+      "pairA": [
+        "Ethan Brooks",
+        "Hannah Fielding"
+      ],
+      "pairB": [
+        "Amy Sinclair",
+        "Sam Whitfield"
+      ],
+      "winner": "A",
+      "scoreLoser": 15
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 2",
+      "pairA": [
+        "Hannah Fielding",
+        "Ben Marsh"
+      ],
+      "pairB": [
+        "Amy Sinclair",
+        "Toby Vaughan"
+      ],
+      "winner": "B",
+      "scoreLoser": 18
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 2",
+      "pairA": [
+        "Hannah Fielding",
+        "Elliot Shaw"
+      ],
+      "pairB": [
+        "Toby Vaughan",
+        "Nathan Price"
+      ],
+      "winner": "A",
+      "scoreLoser": 17
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 3",
+      "pairA": [
+        "Elliot Shaw",
+        "Ben Marsh"
+      ],
+      "pairB": [
+        "Emily Hart",
+        "Marcus Webb"
+      ],
+      "winner": "B",
+      "scoreLoser": 16
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 3",
+      "pairA": [
+        "James Carter",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Chloe Ramsey",
+        "Emily Hart"
+      ],
+      "winner": "B",
+      "scoreLoser": 18
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 3",
+      "pairA": [
+        "Ethan Brooks",
+        "James Carter"
+      ],
+      "pairB": [
+        "Chloe Ramsey",
+        "Rachel Vance"
+      ],
+      "winner": "B",
+      "scoreLoser": 11
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 3",
+      "pairA": [
+        "Ben Marsh",
+        "James Carter"
+      ],
+      "pairB": [
+        "Emily Hart",
+        "Owen Fletcher"
+      ],
+      "winner": "A",
+      "scoreLoser": 13
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 3",
+      "pairA": [
+        "Chris Donnelly",
+        "Luke Harding"
+      ],
+      "pairB": [
+        "Owen Fletcher",
+        "Chloe Ramsey"
+      ],
+      "winner": "A",
+      "scoreLoser": 20
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 3",
+      "pairA": [
+        "Hannah Fielding",
+        "Chris Donnelly"
+      ],
+      "pairB": [
+        "Marcus Webb",
+        "Chloe Ramsey"
+      ],
+      "winner": "A",
+      "scoreLoser": 12
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 4",
+      "pairA": [
+        "Chris Donnelly",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Megan Doyle",
+        "Sophie Lawson"
+      ],
+      "winner": "B",
+      "scoreLoser": 15
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 4",
+      "pairA": [
+        "Luke Harding",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Grace Bennett",
+        "Alex Nolan"
+      ],
+      "winner": "A",
+      "scoreLoser": 19
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 4",
+      "pairA": [
+        "James Carter",
+        "Ethan Brooks"
+      ],
+      "pairB": [
+        "Daniel Hughes",
+        "Oliver Grant"
+      ],
+      "winner": "B",
+      "scoreLoser": 17
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 4",
+      "pairA": [
+        "Ben Marsh",
+        "Chris Donnelly"
+      ],
+      "pairB": [
+        "Daniel Hughes",
+        "Sophie Lawson"
+      ],
+      "winner": "B",
+      "scoreLoser": 17
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 4",
+      "pairA": [
+        "Chris Donnelly",
+        "Luke Harding"
+      ],
+      "pairB": [
+        "Megan Doyle",
+        "Daniel Hughes"
+      ],
+      "winner": "B",
+      "scoreLoser": 20
+    },
+    {
+      "teamA": "Team 1",
+      "teamB": "Team 4",
+      "pairA": [
+        "James Carter",
+        "Hannah Fielding"
+      ],
+      "pairB": [
+        "Daniel Hughes",
+        "Grace Bennett"
+      ],
+      "winner": "B",
+      "scoreLoser": 20
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 3",
+      "pairA": [
+        "Jack Turnbull",
+        "Amy Sinclair"
+      ],
+      "pairB": [
+        "Chloe Ramsey",
+        "Marcus Webb"
+      ],
+      "winner": "A",
+      "scoreLoser": 18
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 3",
+      "pairA": [
+        "Amy Sinclair",
+        "Sam Whitfield"
+      ],
+      "pairB": [
+        "Owen Fletcher",
+        "Ryan Mitchell"
+      ],
+      "winner": "B",
+      "scoreLoser": 17
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 3",
+      "pairA": [
+        "Tom Bailey",
+        "Sam Whitfield"
+      ],
+      "pairB": [
+        "Laura Prescott",
+        "Chloe Ramsey"
+      ],
+      "winner": "A",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 3",
+      "pairA": [
+        "Toby Vaughan",
+        "Jack Turnbull"
+      ],
+      "pairB": [
+        "Laura Prescott",
+        "Emily Hart"
+      ],
+      "winner": "B",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 3",
+      "pairA": [
+        "Tom Bailey",
+        "Nathan Price"
+      ],
+      "pairB": [
+        "Chloe Ramsey",
+        "Marcus Webb"
+      ],
+      "winner": "B",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 3",
+      "pairA": [
+        "Amy Sinclair",
+        "Tom Bailey"
+      ],
+      "pairB": [
+        "Rachel Vance",
+        "Ryan Mitchell"
+      ],
+      "winner": "A",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 4",
+      "pairA": [
+        "Jack Turnbull",
+        "Nathan Price"
+      ],
+      "pairB": [
+        "Daniel Hughes",
+        "Oliver Grant"
+      ],
+      "winner": "B",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 4",
+      "pairA": [
+        "Nathan Price",
+        "Adam Foster"
+      ],
+      "pairB": [
+        "Grace Bennett",
+        "Sophie Lawson"
+      ],
+      "winner": "B",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 4",
+      "pairA": [
+        "Sam Whitfield",
+        "Adam Foster"
+      ],
+      "pairB": [
+        "Megan Doyle",
+        "Josh Kerrigan"
+      ],
+      "winner": "A",
+      "scoreLoser": 20
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 4",
+      "pairA": [
+        "Toby Vaughan",
+        "Adam Foster"
+      ],
+      "pairB": [
+        "Grace Bennett",
+        "Daniel Hughes"
+      ],
+      "winner": "B",
+      "scoreLoser": 15
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 4",
+      "pairA": [
+        "Amy Sinclair",
+        "Tom Bailey"
+      ],
+      "pairB": [
+        "Alex Nolan",
+        "Katie Bright"
+      ],
+      "winner": "B",
+      "scoreLoser": 12
+    },
+    {
+      "teamA": "Team 2",
+      "teamB": "Team 4",
+      "pairA": [
+        "Toby Vaughan",
+        "Amy Sinclair"
+      ],
+      "pairB": [
+        "Sophie Lawson",
+        "Daniel Hughes"
+      ],
+      "winner": "A",
+      "scoreLoser": 14
+    },
+    {
+      "teamA": "Team 3",
+      "teamB": "Team 4",
+      "pairA": [
+        "Laura Prescott",
+        "Liam Ashworth"
+      ],
+      "pairB": [
+        "Megan Doyle",
+        "Grace Bennett"
+      ],
+      "winner": "A",
+      "scoreLoser": 17
+    },
+    {
+      "teamA": "Team 3",
+      "teamB": "Team 4",
+      "pairA": [
+        "Chloe Ramsey",
+        "Liam Ashworth"
+      ],
+      "pairB": [
+        "Daniel Hughes",
+        "Alex Nolan"
+      ],
+      "winner": "B",
+      "scoreLoser": 12
+    },
+    {
+      "teamA": "Team 3",
+      "teamB": "Team 4",
+      "pairA": [
+        "Laura Prescott",
+        "Chloe Ramsey"
+      ],
+      "pairB": [
+        "Grace Bennett",
+        "Alex Nolan"
+      ],
+      "winner": "A",
+      "scoreLoser": 20
+    },
+    {
+      "teamA": "Team 3",
+      "teamB": "Team 4",
+      "pairA": [
+        "Ryan Mitchell",
+        "Emily Hart"
+      ],
+      "pairB": [
+        "Sophie Lawson",
+        "Alex Nolan"
+      ],
+      "winner": "A",
+      "scoreLoser": 16
+    },
+    {
+      "teamA": "Team 3",
+      "teamB": "Team 4",
+      "pairA": [
+        "Liam Ashworth",
+        "Rachel Vance"
+      ],
+      "pairB": [
+        "Grace Bennett",
+        "Alex Nolan"
+      ],
+      "winner": "A",
+      "scoreLoser": 18
+    },
+    {
+      "teamA": "Team 3",
+      "teamB": "Team 4",
+      "pairA": [
+        "Laura Prescott",
+        "Liam Ashworth"
+      ],
+      "pairB": [
+        "Katie Bright",
+        "Oliver Grant"
+      ],
+      "winner": "B",
+      "scoreLoser": 14
+    }
+  ]
+}

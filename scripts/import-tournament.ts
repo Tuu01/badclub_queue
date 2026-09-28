@@ -1,10 +1,10 @@
 // ============================================================
-// import-vlong.ts — capture the historical Vlong Summer Cup 2026 from
-// scripts/data/vlong-clean.json into Firestore. Committed as the audit
+// import-tournament.ts — capture a tournament's final results from
+// scripts/data/demo-tournament.json into Firestore. Committed as the audit
 // record of how the club's first real data got in.
 //
-//   npx tsx scripts/import-vlong.ts            → dry-run preview
-//   npx tsx scripts/import-vlong.ts --confirm  → write it
+//   npx tsx scripts/import-tournament.ts            → dry-run preview
+//   npx tsx scripts/import-tournament.ts --confirm  → write it
 //
 // Idempotent by (name, date): safe to run twice. After a write it
 // re-reads and asserts STRUCTURAL SEPARATION — every rating still at
@@ -35,7 +35,7 @@ async function main() {
   const { adminDb: db } = await import('../lib/firebase-admin');
   const { importTournament } = await import('../lib/tournament');
 
-  const input = JSON.parse(readFileSync(path.resolve(process.cwd(), 'scripts/data/vlong-clean.json'), 'utf8'));
+  const input = JSON.parse(readFileSync(path.resolve(process.cwd(), 'scripts/data/demo-tournament.json'), 'utf8'));
 
   console.log(`\nIMPORT ${input.tournament.name} (${input.tournament.date}) → clubs/${CLUB_ID}`);
   console.log(confirmed ? 'MODE: --confirm → WRITING\n' : 'MODE: DRY RUN (pass --confirm to write)\n');

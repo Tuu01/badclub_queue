@@ -59,7 +59,7 @@ function ImportInner() {
         value={text}
         onChange={e => { setText(e.target.value); setPreview(null); setDone(null); setError(null); }}
         rows={10}
-        placeholder="Paste vlong-clean.json here…"
+        placeholder="Paste demo-tournament.json here…"
         className="w-full rounded-lg border border-line-700 bg-transparent p-3 font-mono text-[12px] text-line-000"
       />
 

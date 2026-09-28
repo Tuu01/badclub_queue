@@ -30,6 +30,8 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "firebase-tools": "^15.24.0",
+    "playwright-core": "^1.61.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.0",
     "typescript": "^5"

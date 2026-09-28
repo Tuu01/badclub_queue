@@ -18,8 +18,8 @@ import { createPlayer, type PublicPlayerDoc } from './firestore';
 // typed docs → the loose DocumentData that set()/update() accept.
 const doc = (o: object): DocumentData => o as DocumentData;
 
-// ---------- import input (the shape of vlong-clean.json) ----------
-export interface ImportPlayer { name: string; vlongId?: string; div: 1 | 2; gender: 'M' | 'F'; bio?: string; }
+// ---------- import input (the shape of scripts/data/demo-tournament.json) ----------
+export interface ImportPlayer { name: string; externalId?: string; div: 1 | 2; gender: 'M' | 'F'; bio?: string; }
 export interface ImportTeam { id: string; name?: string; players: string[]; }
 export interface ImportGame {
   teamA: string; teamB: string;               // team names ("Team 1") or ids ("t1")

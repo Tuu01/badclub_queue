@@ -4,7 +4,7 @@ import { importTournament, type TournamentImportInput } from '@/lib/tournament';
 import { requireRole } from '@/lib/auth';
 import { CLUB_ID } from '@/lib/constants';
 
-// ADMIN only. Body: { input: <vlong-clean.json shape>, dryRun: boolean }.
+// ADMIN only. Body: { input: <demo-tournament.json shape>, dryRun: boolean }.
 // dryRun true → returns the preview (what it WOULD create) without
 // writing. dryRun false → writes, but STILL returns wrote:false if any
 // referenced name is unknown (nothing is written in that case).
