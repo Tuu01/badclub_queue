@@ -43,3 +43,13 @@ next-env.d.ts
 .vercel
 .env*
 screenshots/
+
+# brag video working files (only docs/media/ is committed)
+brag-output/
+rev-desktop.png
+rev-mobile.png
+
+# firebase emulator debug output
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
