@@ -6,12 +6,10 @@ A mobile-web session manager for a badminton club: ~22 people, 3 courts, two
 hours, doubles. It decides who plays next, explains *why* in one sentence, and
 runs off a single tap — because the person organising is also playing.
 
-<table>
-<tr>
-<td width="50%"><img src="docs/media/screen-queue.png" alt="The live queue: a suggested match with its reasoning, then every player's wait time and games played. Your own row is the only coloured thing on screen." /></td>
-<td width="50%"><img src="docs/media/screen-session.png" alt="The session screen: two courts in play, each drawn as a real badminton court with the four players in their halves." /></td>
-</tr>
-</table>
+![The app suggesting a match, explaining why, and the queue re-ordering when the court is taken](docs/media/demo.gif)
+
+▶ **[Watch it with sound](https://vlong.tuuhyped.co.uk/demo.mp4)** (24s, plays in
+the browser)
 
 ### 🏸 [Try the live demo →](https://vlong.tuuhyped.co.uk)
 
@@ -28,11 +26,14 @@ The interesting thing to try: open a suggested court, read the sentence
 explaining *why* those four, then tap **Take court** and watch the queue
 re-order.
 
-![The app suggesting a match, explaining why, and the queue re-ordering when the court is taken](docs/media/demo.gif)
+The real app, running against that same seeded data:
 
-▶ **[Watch it with sound](https://vlong.tuuhyped.co.uk/demo.mp4)** (24s, plays in
-the browser). The screenshots below are the real app running against that same
-seeded data.
+<table>
+<tr>
+<td width="50%"><img src="docs/media/screen-queue.png" alt="The live queue: a suggested match with its reasoning, then every player's wait time and games played. Your own row is the only coloured thing on screen." /></td>
+<td width="50%"><img src="docs/media/screen-session.png" alt="The session screen: two courts in play, each drawn as a real badminton court with the four players in their halves." /></td>
+</tr>
+</table>
 
 ---
 
